@@ -83,6 +83,7 @@ struct IndexTemplate {
     expires_options: Vec<ExpiresOption>,
     token_length_options: Vec<TokenLengthOption>,
     language_options: Vec<LanguageOption>,
+    total_pastes: String,
 }
 
 #[derive(Template)]
@@ -104,12 +105,14 @@ struct ResultTemplate {
     strings: Strings,
     language_label: String,
     remaining_views: Option<String>,
+    total_pastes: String,
 }
 
 #[derive(Template)]
 #[template(path = "404.html")]
 struct NotFoundTemplate {
     strings: Strings,
+    faded_count: String,
 }
 
 #[derive(Deserialize)]
@@ -166,11 +169,26 @@ async fn index(
     let expires_options = build_expires_options(&state.config.paste, &strings);
     let token_length_options = build_token_length_options(&state.config.paste, &strings);
     let language_options = build_language_options(&strings);
+
+    // Get total pastes count (including expired/deleted ones? No, usually existing.
+    // But the prompt says "12,345 moments have been born here".
+    // Since we delete expired pastes, we can't know the historical total unless we track it separately or use AUTOINCREMENT id.
+    // The ID is AUTOINCREMENT, so the max ID is roughly the total born moments.
+    // Let's query MAX(id).
+    let max_id: i64 = sqlx::query_scalar("SELECT MAX(id) FROM pastes")
+        .fetch_one(&state.pool)
+        .await
+        .unwrap_or(Some(0))
+        .unwrap_or(0);
+
+    let total_pastes = strings.stat_total_pastes.replace("{}", &max_id.to_string());
+
     let body = IndexTemplate {
         strings,
         expires_options,
         token_length_options,
         language_options,
+        total_pastes,
     }
     .render()
     .unwrap();
@@ -239,11 +257,20 @@ async fn create_paste(
         }
     };
     let expires_in_text = format_duration(expires_at, &strings);
+
     let language_label = build_language_options(&strings)
         .into_iter()
         .find(|opt| opt.value == language)
         .map(|opt| opt.label)
         .unwrap_or_else(|| language.clone());
+
+    // Get updated total pastes count for OOB swap
+    let max_id: i64 = sqlx::query_scalar("SELECT MAX(id) FROM pastes")
+        .fetch_one(&state.pool)
+        .await
+        .unwrap_or(Some(0))
+        .unwrap_or(0);
+    let total_pastes = strings.stat_total_pastes.replace("{}", &max_id.to_string());
 
     let remaining_views = if let Some(max) = max_views {
         // Newly created paste has 0 views, but we show remaining views
@@ -272,6 +299,7 @@ async fn create_paste(
             strings,
             language_label,
             remaining_views,
+            total_pastes,
         }
         .render()
         .unwrap();
@@ -358,7 +386,24 @@ async fn view_paste(
             Html(body).into_response()
         }
         None => {
-            let body = NotFoundTemplate { strings }.render().unwrap();
+            let max_id: i64 = sqlx::query_scalar("SELECT MAX(id) FROM pastes")
+                .fetch_one(&state.pool)
+                .await
+                .unwrap_or(Some(0))
+                .unwrap_or(0);
+            let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM pastes")
+                .fetch_one(&state.pool)
+                .await
+                .unwrap_or(0);
+            let faded = (max_id - count).max(0);
+            let faded_count = strings.stat_faded.replace("{}", &faded.to_string());
+
+            let body = NotFoundTemplate {
+                strings,
+                faded_count,
+            }
+            .render()
+            .unwrap();
             (StatusCode::NOT_FOUND, Html(body)).into_response()
         }
     };
@@ -786,6 +831,8 @@ struct Strings {
     label_burn_views: String,
     detail_remaining_views: String,
     detail_zero_views: String,
+    stat_total_pastes: String,
+    stat_faded: String,
 }
 
 #[derive(Clone)]
