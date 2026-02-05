@@ -1,5 +1,7 @@
 # 蜉邮（Mayfile）
 
+[English](./README.md)
+
 生于瞬息，死于阅后。
 
 一个使用 Rust 构建的极简、高性能、自托管的代码粘贴板（Pastebin）服务。
@@ -85,4 +87,4 @@ max_content_length = 1000000  # 最大内容 1 MB
 
 ## 许可证
 
-MIT License
+本项目基于 [MIT License](LICENSE) 开源。

@@ -1,5 +1,7 @@
 # Mayfile
 
+[简体中文](./README.zh-CN.md)
+
 Born in a blink, dead after link.
 
 A minimalist, high-performance, self-hosted pastebin service built with Rust.
@@ -85,4 +87,4 @@ max_content_length = 1000000  # 1 MB
 
 ## License
 
-MIT License
+This project is licensed under the [MIT License](LICENSE).
