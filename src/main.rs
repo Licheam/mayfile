@@ -589,6 +589,7 @@ struct Strings {
     detail_copy: String,
     detail_copy_done: String,
     detail_raw: String,
+    detail_new_paste: String,
     not_found: String,
     content_too_long: String,
     aria_short_link: String,

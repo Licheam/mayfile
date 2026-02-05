@@ -11,19 +11,28 @@
 
 <body>
   <main class="container">
-    <a class="back-link" href="/">{{ strings.detail_back }}</a>
-    <h1>{{ item.title }}</h1>
+
+    <div class="title-row">
+      <h1>{{ item.title }}</h1>
+      <a class="btn btn-secondary" href="/">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+          <path
+            d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z" />
+        </svg>
+        {{ strings.detail_new_paste }}
+      </a>
+    </div>
     <div class="result-meta">
       <span>{{ strings.detail_expires_label }}：{{ expires_in }}</span>
       <span style="margin: 0 8px; color: #d7dbe1;">|</span>
       <span>{{ strings.label_language }}：<span id="language-label-val">{{ language_label }}</span></span>
     </div>
     <div class="detail-actions">
-      <button class="action-button" type="button" id="copy-btn" data-label="{{ strings.detail_copy }}"
+      <button class="btn btn-secondary" type="button" id="copy-btn" data-label="{{ strings.detail_copy }}"
         data-copied="{{ strings.detail_copy_done }}">
         {{ strings.detail_copy }}
       </button>
-      <a class="action-link" href="/r/{{ token }}">{{ strings.detail_raw }}</a>
+      <a class="btn btn-secondary" href="/r/{{ token }}">{{ strings.detail_raw }}</a>
     </div>
     <div class="code-wrapper">
       <div class="line-numbers" id="line-numbers"></div>
