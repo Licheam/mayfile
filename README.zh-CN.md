@@ -39,7 +39,7 @@
    docker-compose up -d
    ```
 
-服务启动后访问 `http://localhost:3000` 即可使用。
+服务启动后访问 `http://localhost:8080` 即可使用。
 
 ### 手动安装
 
@@ -70,7 +70,7 @@
 ```toml
 [server]
 host = "0.0.0.0"
-port = 3000
+port = 8080
 
 [paste]
 db_path = "data/pastebin.db"

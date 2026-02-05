@@ -39,7 +39,7 @@ Note: The configuration files and `docker-compose.yml` are git-ignored. You will
    docker-compose up -d
    ```
 
-The service will be available at `http://localhost:3000`.
+The service will be available at `http://localhost:8080`.
 
 ### Manual Installation
 
@@ -70,7 +70,7 @@ Example `config/app.toml`:
 ```toml
 [server]
 host = "0.0.0.0"
-port = 3000
+port = 8080
 
 [paste]
 db_path = "data/pastebin.db"

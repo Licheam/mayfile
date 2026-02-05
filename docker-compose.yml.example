@@ -2,7 +2,7 @@ services:
   mayfile:
     build: .
     ports:
-      - "3000:3000"
+      - "8080:8080"
     volumes:
       - ./config:/app/config
       - ./locales:/app/locales
