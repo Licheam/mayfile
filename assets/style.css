@@ -23,11 +23,19 @@ body {
 
 h1.logo {
   font-size: 24px;
-  margin: 0 0 24px;
+  margin: 0 0 8px;
   color: #1f2430;
   text-align: center;
   font-weight: 700;
   opacity: 0.8;
+}
+
+.slogan {
+  text-align: center;
+  color: #9aa5b1;
+  font-size: 14px;
+  font-weight: 400;
+  margin-bottom: 32px;
 }
 
 .paste-form {
