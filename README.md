@@ -2,7 +2,7 @@
 
 [简体中文](./README.zh-CN.md)
 
-Born in a blink, dead after link.
+Born in a blink. Gone with a link.
 
 A minimalist, high-performance, self-hosted pastebin service built with Rust.
 
