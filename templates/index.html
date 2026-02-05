@@ -17,7 +17,7 @@
 <body>
   <main class="container">
     <h1 class="logo">{{ strings.heading }}</h1>
-    <div class="slogan">Born in a blink. Gone with a link.</div>
+    <div class="slogan">{{ strings.slogan }}</div>
     <form class="paste-form" hx-post="/paste" hx-target="#result" hx-swap="innerHTML" id="pasteForm">
 
       <!-- Content Area (Priority) -->
@@ -46,6 +46,11 @@
             <option value="{{ option.value }}" {% if option.selected %} selected{% endif %}>{{ option.label }}</option>
             {% endfor %}
           </select>
+        </div>
+
+        <div class="input-group" title="{{ strings.label_burn }}">
+          <input type="number" name="max_views" placeholder="{{ strings.label_burn_views }}" min="0"
+            style="width: 8em;" />
         </div>
 
         <!-- Hidden purely visual optional or advanced settings if needed, or keep them here -->

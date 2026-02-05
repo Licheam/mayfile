@@ -26,11 +26,15 @@ struct Paste {
     content: String,
     expires_at: i64,
     language: String,
+    views: i64,
+    max_views: Option<i64>,
 }
 
 #[derive(Clone, FromRow)]
 struct RawPaste {
     content: String,
+    views: i64,
+    max_views: Option<i64>,
 }
 
 #[derive(Clone)]
@@ -98,6 +102,12 @@ struct ResultTemplate {
     strings: Strings,
 }
 
+#[derive(Template)]
+#[template(path = "404.html")]
+struct NotFoundTemplate {
+    strings: Strings,
+}
+
 #[derive(Deserialize)]
 struct PasteForm {
     title: Option<String>,
@@ -105,6 +115,7 @@ struct PasteForm {
     expires_in: Option<i64>,
     token_length: Option<usize>,
     language: Option<String>,
+    max_views: Option<String>,
 }
 
 #[tokio::main]
@@ -190,6 +201,7 @@ async fn create_paste(
     let expires_in = normalize_expires_in(form.expires_in, &state.config.paste);
     let token_length = normalize_token_length(form.token_length, &state.config.paste);
     let language = normalize_language(form.language);
+    let max_views = normalize_max_views(form.max_views);
     let expires_at = now_ts() + expires_in;
     let title = normalize_title(form.title, &form.content);
     let token = match insert_paste(
@@ -199,6 +211,7 @@ async fn create_paste(
         expires_at,
         token_length,
         language,
+        max_views,
     )
     .await
     {
@@ -235,9 +248,9 @@ async fn view_paste(
     enforce_size_limit(&state.pool, state.config.paste.max_pastes, 0).await;
     let lang = select_language(&headers);
     let strings = state.i18n.strings(lang);
-    let item = sqlx::query_as::<_, Paste>(
+    let item: Option<Paste> = sqlx::query_as(
         r#"
-        SELECT title, content, expires_at, language
+        SELECT title, content, expires_at, language, views, max_views
         FROM pastes
         WHERE token = ? AND expires_at > strftime('%s','now')
         "#,
@@ -246,6 +259,25 @@ async fn view_paste(
     .fetch_optional(&state.pool)
     .await
     .unwrap();
+
+    if let Some(ref p) = item {
+        let new_views = p.views + 1;
+        sqlx::query("UPDATE pastes SET views = ? WHERE token = ?")
+            .bind(new_views)
+            .bind(&token)
+            .execute(&state.pool)
+            .await
+            .ok();
+        if let Some(max) = p.max_views {
+            if max > 0 && new_views >= max {
+                sqlx::query("DELETE FROM pastes WHERE token = ?")
+                    .bind(&token)
+                    .execute(&state.pool)
+                    .await
+                    .ok();
+            }
+        }
+    }
 
     match item {
         Some(item) => {
@@ -266,7 +298,10 @@ async fn view_paste(
             .unwrap();
             Html(body).into_response()
         }
-        None => (StatusCode::NOT_FOUND, Html(strings.not_found.clone())).into_response(),
+        None => {
+            let body = NotFoundTemplate { strings }.render().unwrap();
+            (StatusCode::NOT_FOUND, Html(body)).into_response()
+        }
     }
 }
 
@@ -276,9 +311,9 @@ async fn view_paste_raw(
 ) -> impl IntoResponse {
     cleanup_expired(&state.pool).await;
     enforce_size_limit(&state.pool, state.config.paste.max_pastes, 0).await;
-    let item = sqlx::query_as::<_, RawPaste>(
+    let item: Option<RawPaste> = sqlx::query_as(
         r#"
-        SELECT content
+        SELECT content, views, max_views
         FROM pastes
         WHERE token = ? AND expires_at > strftime('%s','now')
         "#,
@@ -287,6 +322,25 @@ async fn view_paste_raw(
     .fetch_optional(&state.pool)
     .await
     .unwrap();
+
+    if let Some(ref p) = item {
+        let new_views = p.views + 1;
+        sqlx::query("UPDATE pastes SET views = ? WHERE token = ?")
+            .bind(new_views)
+            .bind(&token)
+            .execute(&state.pool)
+            .await
+            .ok();
+        if let Some(max) = p.max_views {
+            if max > 0 && new_views >= max {
+                sqlx::query("DELETE FROM pastes WHERE token = ?")
+                    .bind(&token)
+                    .execute(&state.pool)
+                    .await
+                    .ok();
+            }
+        }
+    }
 
     match item {
         Some(item) => {
@@ -316,7 +370,9 @@ async fn ensure_schema(pool: &SqlitePool) {
             content TEXT NOT NULL,
             language TEXT,
             created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
-            expires_at INTEGER
+            expires_at INTEGER,
+            views INTEGER NOT NULL DEFAULT 0,
+            max_views INTEGER
         )
         "#,
     )
@@ -373,6 +429,34 @@ async fn ensure_schema(pool: &SqlitePool) {
         .execute(pool)
         .await
         .unwrap();
+
+    let columns = sqlx::query("PRAGMA table_info(pastes)")
+        .fetch_all(pool)
+        .await
+        .unwrap();
+    let mut has_views = false;
+    let mut has_max_views = false;
+    for column in columns {
+        let name: String = column.get("name");
+        if name == "views" {
+            has_views = true;
+        }
+        if name == "max_views" {
+            has_max_views = true;
+        }
+    }
+    if !has_views {
+        sqlx::query("ALTER TABLE pastes ADD COLUMN views INTEGER NOT NULL DEFAULT 0")
+            .execute(pool)
+            .await
+            .unwrap();
+    }
+    if !has_max_views {
+        sqlx::query("ALTER TABLE pastes ADD COLUMN max_views INTEGER")
+            .execute(pool)
+            .await
+            .unwrap();
+    }
 }
 
 async fn cleanup_expired(pool: &SqlitePool) {
@@ -448,13 +532,14 @@ async fn insert_paste(
     expires_at: i64,
     token_length: usize,
     language: String,
+    max_views: Option<i64>,
 ) -> Result<String, sqlx::Error> {
     let mut token = generate_token(token_length);
     for _ in 0..5 {
         let result = sqlx::query(
             r#"
-            INSERT INTO pastes (token, title, content, expires_at, language)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO pastes (token, title, content, expires_at, language, max_views)
+            VALUES (?, ?, ?, ?, ?, ?)
             "#,
         )
         .bind(&token)
@@ -462,6 +547,7 @@ async fn insert_paste(
         .bind(&content)
         .bind(expires_at)
         .bind(&language)
+        .bind(max_views)
         .execute(pool)
         .await;
 
@@ -568,11 +654,18 @@ fn normalize_title(title: Option<String>, content: &str) -> String {
     }
 }
 
+fn normalize_max_views(max_views: Option<String>) -> Option<i64> {
+    max_views
+        .and_then(|s| s.parse::<i64>().ok())
+        .filter(|&v| v > 0)
+}
+
 #[derive(Clone, Deserialize)]
 struct Strings {
     lang: String,
     app_title: String,
     heading: String,
+    slogan: String,
     label_title: String,
     placeholder_title: String,
     label_content: String,
@@ -591,6 +684,8 @@ struct Strings {
     detail_raw: String,
     detail_new_paste: String,
     not_found: String,
+    not_found_title: String,
+    not_found_desc: String,
     content_too_long: String,
     aria_short_link: String,
     duration_expired: String,
@@ -622,6 +717,8 @@ struct Strings {
     language_yaml: String,
     language_sql: String,
     language_bash: String,
+    label_burn: String,
+    label_burn_views: String,
 }
 
 #[derive(Clone)]

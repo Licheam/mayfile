@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="{{ strings.lang }}">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ strings.not_found_title }} - {{ strings.app_title }}</title>
+    <link rel="stylesheet" href="/assets/style.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Header:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <main class="container" style="justify-content: center; align-items: center; text-align: center; min-height: 60vh;">
+        <h1 class="logo" style="margin-bottom: 2rem;">{{ strings.heading }}</h1>
+        <div style="font-size: 6rem; line-height: 1; margin-bottom: 1.5rem; opacity: 0.1; font-weight: 700;">404</div>
+        <h2 style="font-size: 24px; font-weight: 600; color: #1f2430; margin: 0 0 1rem;">{{ strings.not_found_title }}
+        </h2>
+        <p style="color: #6a737d; margin: 0 0 2.5rem; max-width: 400px; line-height: 1.6;">{{ strings.not_found_desc }}
+        </p>
+        <a href="/" class="btn btn-primary" style="padding: 10px 24px; font-size: 16px;">{{ strings.detail_new_paste
+            }}</a>
+    </main>
+</body>
+
+</html>
