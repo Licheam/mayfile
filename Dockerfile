@@ -11,4 +11,4 @@ COPY --from=builder /app/templates /app/templates
 COPY --from=builder /app/config /app/config
 COPY --from=builder /app/locales /app/locales
 EXPOSE 3000
-CMD ["./mayfile"]
+CMD ["sh", "-c", "[ -f config/app.toml ] || cp config/app.toml.example config/app.toml; ./mayfile"]
