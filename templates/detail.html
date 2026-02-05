@@ -13,7 +13,11 @@
   <main class="container">
     <a class="back-link" href="/">{{ strings.detail_back }}</a>
     <h1>{{ item.title }}</h1>
-    <div class="result-meta">{{ strings.detail_expires_label }}：{{ expires_in }}</div>
+    <div class="result-meta">
+      <span>{{ strings.detail_expires_label }}：{{ expires_in }}</span>
+      <span style="margin: 0 8px; color: #d7dbe1;">|</span>
+      <span>{{ strings.label_language }}：<span id="language-label-val">{{ language_label }}</span></span>
+    </div>
     <div class="detail-actions">
       <button class="action-button" type="button" id="copy-btn" data-label="{{ strings.detail_copy }}"
         data-copied="{{ strings.detail_copy_done }}">
@@ -21,21 +25,41 @@
       </button>
       <a class="action-link" href="/r/{{ token }}">{{ strings.detail_raw }}</a>
     </div>
-    <pre
-      class="paste-content"><code id="paste-content" data-language="{{ item.language }}">{{ item.content }}</code></pre>
+    <div class="code-wrapper">
+      <div class="line-numbers" id="line-numbers"></div>
+      <pre
+        class="paste-content"><code id="paste-content" data-language="{{ item.language }}">{{ item.content }}</code></pre>
+    </div>
   </main>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/highlight.min.js"></script>
   <script>
     const copyButton = document.getElementById("copy-btn");
     const content = document.getElementById("paste-content");
-    if (copyButton && content) {
+    const lineNumbers = document.getElementById("line-numbers");
+
+    if (content) {
+      const source = content.textContent || "";
+      if (lineNumbers) {
+        const linesCount = source.split(/\r\n|\r|\n/).length;
+        let nums = "";
+        for (let i = 1; i <= linesCount; i++) {
+          nums += i + "\n";
+        }
+        lineNumbers.textContent = nums;
+      }
+
       const language = content.dataset.language || "auto";
       if (window.hljs) {
-        const source = content.textContent || "";
         if (language === "auto") {
           const result = window.hljs.highlightAuto(source);
           content.innerHTML = result.value;
           content.classList.add("hljs");
+          if (result.language) {
+            const langLabel = document.getElementById("language-label-val");
+            if (langLabel) {
+              langLabel.textContent += " (" + result.language + ")";
+            }
+          }
         } else if (window.hljs.getLanguage(language)) {
           const result = window.hljs.highlight(source, { language });
           content.innerHTML = result.value;
@@ -46,6 +70,9 @@
           content.classList.add("hljs");
         }
       }
+    }
+
+    if (copyButton && content) {
       copyButton.addEventListener("click", async () => {
         const text = content.textContent || "";
         try {

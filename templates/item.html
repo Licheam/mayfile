@@ -1,13 +1,7 @@
 <div class="result-card">
-<div class="result-title">{{ strings.result_title }}</div>
+  <div class="result-title">{{ strings.result_title }}</div>
   <div class="result-row">
-    <input
-      class="result-input"
-      type="text"
-      readonly
-      value="{{ path }}"
-      aria-label="{{ strings.aria_short_link }}"
-    />
+    <input class="result-input" type="text" readonly value="{{ path }}" aria-label="{{ strings.aria_short_link }}" />
     <a class="result-link" href="{{ path }}">{{ strings.result_open }}</a>
   </div>
   <div class="result-meta">{{ strings.result_expires_label }}：{{ expires_in }}</div>

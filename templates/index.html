@@ -1,53 +1,107 @@
 <!doctype html>
 <html lang="{{ strings.lang }}">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{{ strings.app_title }}</title>
-    <link rel="stylesheet" href="/assets/style.css" />
-    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
-  </head>
-  <body>
-    <main class="container">
-      <h1>{{ strings.heading }}</h1>
-      <form class="paste-form" hx-post="/paste" hx-target="#result" hx-swap="innerHTML">
-        <label class="field">
-          <span>{{ strings.label_title }}</span>
-          <input type="text" name="title" placeholder="{{ strings.placeholder_title }}" />
-        </label>
-        <label class="field">
-          <span>{{ strings.label_content }}</span>
-          <textarea name="content" rows="10" required></textarea>
-        </label>
-        <label class="field">
-          <span>{{ strings.label_expires }}</span>
-          <select name="expires_in">
-            {% for option in expires_options %}
-              <option value="{{ option.value }}"{% if option.selected %} selected{% endif %}>{{ option.label }}</option>
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ strings.app_title }}</title>
+  <link rel="stylesheet" href="/assets/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Header:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+</head>
+
+<body>
+  <main class="container">
+    <h1 class="logo">{{ strings.heading }}</h1>
+    <form class="paste-form" hx-post="/paste" hx-target="#result" hx-swap="innerHTML" id="pasteForm">
+
+      <!-- Content Area (Priority) -->
+      <div class="content-area">
+        <textarea name="content" id="contentInput" placeholder="{{ strings.label_content }}..." required
+          autofocus></textarea>
+      </div>
+
+      <!-- Settings Bar -->
+      <div class="settings-bar">
+        <div class="input-group">
+          <input type="text" name="title" id="titleInput" placeholder="{{ strings.placeholder_title }}" />
+        </div>
+
+        <div class="input-group">
+          <select name="language" title="{{ strings.label_language }}">
+            {% for option in language_options %}
+            <option value="{{ option.value }}" {% if option.selected %} selected{% endif %}>{{ option.label }}</option>
             {% endfor %}
           </select>
-        </label>
-        <label class="field">
-          <span>{{ strings.label_token_length }}</span>
+        </div>
+
+        <div class="input-group">
+          <select name="expires_in" title="{{ strings.label_expires }}">
+            {% for option in expires_options %}
+            <option value="{{ option.value }}" {% if option.selected %} selected{% endif %}>{{ option.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Hidden purely visual optional or advanced settings if needed, or keep them here -->
+        <div class="input-group" style="display:none;"> <!-- Hiding token length to declutter, or keep if critical -->
           <select name="token_length">
             {% for option in token_length_options %}
-              <option value="{{ option.value }}"{% if option.selected %} selected{% endif %}>{{ option.label }}</option>
+            <option value="{{ option.value }}" {% if option.selected %} selected{% endif %}>{{ option.label }}</option>
             {% endfor %}
           </select>
-        </label>
-        <label class="field">
-          <span>{{ strings.label_language }}</span>
-          <select name="language">
-            {% for option in language_options %}
-              <option value="{{ option.value }}"{% if option.selected %} selected{% endif %}>{{ option.label }}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <button type="submit">{{ strings.button_create }}</button>
-      </form>
-      <section class="result-section" id="result">
-        <div class="result-placeholder">{{ strings.result_placeholder }}</div>
-      </section>
-    </main>
-  </body>
+        </div>
+
+        <button type="submit" id="submitBtn">{{ strings.button_create }}</button>
+      </div>
+    </form>
+
+    <section class="result-section" id="result">
+      <div class="result-placeholder">{{ strings.result_placeholder }}</div>
+    </section>
+  </main>
+
+  <script>
+    // Random Title Generator
+    const adjectives = [
+      "Cosmic", "Silent", "Neon", "Rapid", "Digital", "Lunar", "Solar", "Velvet",
+      "Hidden", "Abstract", "Crystal", "Obsidian", "Ethereal", "Quantum", "Cyber"
+    ];
+    const nouns = [
+      "Fragment", "Echo", "Signal", "Note", "Spark", "Trace", "Pulse", "Flow",
+      "Shard", "Whisper", "Byte", "Horizon", "Vertex", "Prism", "Voyager"
+    ];
+
+    function generateRandomTitle() {
+      const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+      const noun = nouns[Math.floor(Math.random() * nouns.length)];
+      return `${adj} ${noun}`;
+    }
+
+    // Set placeholder and handle empty title on submit
+    const titleInput = document.getElementById('titleInput');
+    const randomName = generateRandomTitle();
+    titleInput.placeholder = randomName;
+
+    document.getElementById('pasteForm').addEventListener('submit', function () {
+      if (!titleInput.value.trim()) {
+        titleInput.value = randomName;
+      }
+    });
+
+    // Click anywhere to focus content (Distraction Free Mode)
+    document.addEventListener('click', function (e) {
+      const contentInput = document.getElementById('contentInput');
+      // If click target is not an interactive element (input, select, button, a)
+      if (!e.target.closest('input, select, button, a, textarea, .settings-bar')) {
+        contentInput.focus();
+      }
+    });
+  </script>
+</body>
+
 </html>

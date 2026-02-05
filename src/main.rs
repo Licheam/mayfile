@@ -1,24 +1,24 @@
 use askama::Template;
 use axum::{
+    Router,
     extract::{Form, Path, State},
     http::{
-        header::{CONTENT_DISPOSITION, CONTENT_TYPE},
         HeaderMap, HeaderValue, StatusCode,
+        header::{CONTENT_DISPOSITION, CONTENT_TYPE},
     },
     response::{Html, IntoResponse, Redirect},
     routing::{get, post},
-    Router,
 };
+use rand::{TryRngCore, rngs::OsRng};
 use serde::Deserialize;
 use sqlx::Row;
 use sqlx::{
-    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     FromRow, SqlitePool,
+    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
 };
-use std::{fs, path::PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
+use std::{fs, path::PathBuf};
 use tower_http::services::ServeDir;
-use rand::{rngs::OsRng, TryRngCore};
 
 #[derive(Clone, FromRow)]
 struct Paste {
@@ -87,6 +87,7 @@ struct DetailTemplate {
     expires_in: String,
     strings: Strings,
     token: String,
+    language_label: String,
 }
 
 #[derive(Template)]
@@ -134,9 +135,7 @@ async fn main() {
         .nest_service("/assets", ServeDir::new("assets"))
         .with_state(AppState { pool, config, i18n });
 
-    let listener = tokio::net::TcpListener::bind(&addr)
-        .await
-        .unwrap();
+    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
 
@@ -176,9 +175,10 @@ async fn create_paste(
         return (StatusCode::BAD_REQUEST, Html(message)).into_response();
     }
     if (content_length as i64) > state.config.paste.max_total_content_length {
-        let message = strings
-            .content_too_long
-            .replace("{}", &state.config.paste.max_total_content_length.to_string());
+        let message = strings.content_too_long.replace(
+            "{}",
+            &state.config.paste.max_total_content_length.to_string(),
+        );
         return (StatusCode::BAD_REQUEST, Html(message)).into_response();
     }
     enforce_total_content_length(
@@ -192,9 +192,24 @@ async fn create_paste(
     let language = normalize_language(form.language);
     let expires_at = now_ts() + expires_in;
     let title = normalize_title(form.title, &form.content);
-    let token = match insert_paste(&state.pool, title, form.content, expires_at, token_length, language).await {
+    let token = match insert_paste(
+        &state.pool,
+        title,
+        form.content,
+        expires_at,
+        token_length,
+        language,
+    )
+    .await
+    {
         Ok(result) => result,
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Html("Failed".to_string())).into_response(),
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Html("Failed".to_string()),
+            )
+                .into_response();
+        }
     };
     let expires_in_text = format_duration(expires_at, &strings);
     if headers.contains_key("hx-request") {
@@ -234,11 +249,18 @@ async fn view_paste(
 
     match item {
         Some(item) => {
+            let language_label = build_language_options(&strings)
+                .into_iter()
+                .find(|opt| opt.value == item.language)
+                .map(|opt| opt.label)
+                .unwrap_or_else(|| item.language.clone());
+
             let body = DetailTemplate {
                 expires_in: format_duration(item.expires_at, &strings),
                 item,
                 strings,
                 token,
+                language_label,
             }
             .render()
             .unwrap();
@@ -248,7 +270,10 @@ async fn view_paste(
     }
 }
 
-async fn view_paste_raw(State(state): State<AppState>, Path(token): Path<String>) -> impl IntoResponse {
+async fn view_paste_raw(
+    State(state): State<AppState>,
+    Path(token): Path<String>,
+) -> impl IntoResponse {
     cleanup_expired(&state.pool).await;
     enforce_size_limit(&state.pool, state.config.paste.max_pastes, 0).await;
     let item = sqlx::query_as::<_, RawPaste>(
@@ -646,11 +671,7 @@ fn select_language(headers: &HeaderMap) -> Lang {
         .and_then(|value| value.to_str().ok())
         .map(|value| value.to_lowercase().contains("zh"))
         .unwrap_or(true);
-    if is_zh {
-        Lang::Zh
-    } else {
-        Lang::En
-    }
+    if is_zh { Lang::Zh } else { Lang::En }
 }
 
 fn build_expires_options(config: &PasteConfig, strings: &Strings) -> Vec<ExpiresOption> {
@@ -671,9 +692,7 @@ fn build_token_length_options(config: &PasteConfig, strings: &Strings) -> Vec<To
         .iter()
         .map(|value| TokenLengthOption {
             value: *value,
-            label: strings
-                .token_length_label
-                .replace("{}", &value.to_string()),
+            label: strings.token_length_label.replace("{}", &value.to_string()),
             selected: *value == config.default_token_length,
         })
         .collect()
@@ -786,18 +805,14 @@ fn format_expires_label(secs: i64, strings: &Strings) -> String {
         if days == 1 {
             strings.expires_days_one.clone()
         } else {
-            strings
-                .expires_days_many
-                .replace("{}", &days.to_string())
+            strings.expires_days_many.replace("{}", &days.to_string())
         }
     } else if secs >= 3600 && secs % 3600 == 0 {
         let hours = secs / 3600;
         if hours == 1 {
             strings.expires_hours_one.clone()
         } else {
-            strings
-                .expires_hours_many
-                .replace("{}", &hours.to_string())
+            strings.expires_hours_many.replace("{}", &hours.to_string())
         }
     } else if secs >= 60 && secs % 60 == 0 {
         let minutes = secs / 60;
