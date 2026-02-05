@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="{{ strings.lang }}">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>{{ strings.explore_title }} - {{ strings.app_title }}</title>
+    <link rel="stylesheet" href="/assets/style.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Header:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+</head>
+
+<body class="explore-page">
+    <!-- Explore Container -->
+    <div class="explore-container" id="exploreContainer">
+        {% if total == 0 %}
+        <!-- Empty State -->
+        <div class="explore-empty">
+            <div class="explore-empty-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M8 15h8"></path>
+                    <circle cx="9" cy="9" r="1"></circle>
+                    <circle cx="15" cy="9" r="1"></circle>
+                </svg>
+            </div>
+            <h2>{{ strings.explore_empty }}</h2>
+            <a href="/" class="btn btn-primary">{{ strings.button_create }}</a>
+        </div>
+        {% else %}
+        <!-- Slides Container -->
+        <div class="explore-slides" id="exploreSlides">
+            {% for paste in pastes %}
+            <div class="explore-slide" data-index="{{ loop.index0 }}" data-token="{{ paste.token }}">
+                <div class="slide-content">
+                    <div class="slide-header">
+                        <h1 class="slide-title">{{ paste.title }}</h1>
+                        <a href="/p/{{ paste.token }}" class="slide-link btn btn-secondary" target="_blank">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                                <polyline points="15 3 21 3 21 9"></polyline>
+                                <line x1="10" y1="14" x2="21" y2="3"></line>
+                            </svg>
+                        </a>
+                    </div>
+                    <div class="slide-code-wrapper">
+                        <pre
+                            class="slide-code"><code class="language-{{ paste.language }}">{{ paste.content }}</code></pre>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Navigation Controls -->
+        <div class="explore-nav">
+            <button class="nav-btn nav-prev" id="navPrev" title="{{ strings.explore_nav_prev }}">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="18 15 12 9 6 15"></polyline>
+                </svg>
+            </button>
+            <button class="nav-btn nav-next" id="navNext" title="{{ strings.explore_nav_next }}">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Progress Indicator -->
+        <div class="explore-progress">
+            <span class="progress-current" id="progressCurrent">1</span>
+            <span class="progress-separator">/</span>
+            <span class="progress-total" id="progressTotal">{{ total }}</span>
+        </div>
+
+        <!-- Swipe Hint (shown briefly) -->
+        <div class="explore-hint" id="exploreHint">
+            {{ strings.explore_swipe_hint }}
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Home Button -->
+    <a href="/" class="explore-home" title="{{ strings.detail_new_paste }}">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+        </svg>
+    </a>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const slides = document.querySelectorAll('.explore-slide');
+            const total = slides.length;
+
+            if (total === 0) return;
+
+            let currentIndex = 0;
+            let isAnimating = false;
+            let touchStartY = 0;
+            let touchEndY = 0;
+
+            const progressCurrent = document.getElementById('progressCurrent');
+            const progressTotal = document.getElementById('progressTotal');
+            const navPrev = document.getElementById('navPrev');
+            const navNext = document.getElementById('navNext');
+            const hint = document.getElementById('exploreHint');
+
+            // Initialize
+            updateSlides();
+            highlightCode();
+
+            // Hide hint after 3 seconds
+            if (hint) {
+                setTimeout(() => {
+                    hint.classList.add('hidden');
+                }, 3000);
+            }
+
+            function updateSlides() {
+                slides.forEach((slide, index) => {
+                    slide.classList.remove('active', 'prev', 'next');
+                    if (index === currentIndex) {
+                        slide.classList.add('active');
+                    } else if (index < currentIndex) {
+                        slide.classList.add('prev');
+                    } else {
+                        slide.classList.add('next');
+                    }
+                });
+                progressCurrent.textContent = currentIndex + 1;
+
+                // Update nav button states
+                navPrev.classList.toggle('disabled', currentIndex === 0);
+                navNext.classList.toggle('disabled', currentIndex === total - 1);
+            }
+
+            function goToSlide(index) {
+                if (isAnimating) return;
+                if (index < 0 || index >= total) return;
+
+                isAnimating = true;
+                currentIndex = index;
+                updateSlides();
+
+                setTimeout(() => {
+                    isAnimating = false;
+                    highlightCurrentSlide();
+                }, 400);
+            }
+
+            function goNext() {
+                if (currentIndex < total - 1) {
+                    goToSlide(currentIndex + 1);
+                }
+            }
+
+            function goPrev() {
+                if (currentIndex > 0) {
+                    goToSlide(currentIndex - 1);
+                }
+            }
+
+            function highlightCode() {
+                document.querySelectorAll('pre code').forEach((el) => {
+                    hljs.highlightElement(el);
+                });
+            }
+
+            function highlightCurrentSlide() {
+                const activeSlide = slides[currentIndex];
+                if (activeSlide) {
+                    const code = activeSlide.querySelector('pre code');
+                    if (code && !code.classList.contains('hljs')) {
+                        hljs.highlightElement(code);
+                    }
+                }
+            }
+
+            // Keyboard navigation
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowUp' || e.key === 'k') {
+                    e.preventDefault();
+                    goPrev();
+                } else if (e.key === 'ArrowDown' || e.key === 'j' || e.key === ' ') {
+                    e.preventDefault();
+                    goNext();
+                }
+            });
+
+            // Button navigation
+            navPrev.addEventListener('click', goPrev);
+            navNext.addEventListener('click', goNext);
+
+            // Touch swipe
+            document.addEventListener('touchstart', (e) => {
+                touchStartY = e.changedTouches[0].screenY;
+            }, { passive: true });
+
+            document.addEventListener('touchend', (e) => {
+                touchEndY = e.changedTouches[0].screenY;
+                handleSwipe();
+            }, { passive: true });
+
+            function handleSwipe() {
+                const diff = touchStartY - touchEndY;
+                const threshold = 50;
+
+                if (Math.abs(diff) > threshold) {
+                    if (diff > 0) {
+                        // Swipe up - go next
+                        goNext();
+                    } else {
+                        // Swipe down - go prev
+                        goPrev();
+                    }
+                }
+            }
+
+            // Mouse wheel
+            let wheelTimeout = null;
+            document.addEventListener('wheel', (e) => {
+                if (wheelTimeout) return;
+
+                wheelTimeout = setTimeout(() => {
+                    wheelTimeout = null;
+                }, 500);
+
+                if (e.deltaY > 0) {
+                    goNext();
+                } else if (e.deltaY < 0) {
+                    goPrev();
+                }
+            }, { passive: true });
+        });
+    </script>
+</body>
+
+</html>

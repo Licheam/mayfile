@@ -29,6 +29,7 @@ struct Paste {
     language: String,
     views: i64,
     max_views: Option<i64>,
+    is_public: bool,
 }
 
 #[derive(Clone, FromRow)]
@@ -36,6 +37,15 @@ struct RawPaste {
     content: String,
     views: i64,
     max_views: Option<i64>,
+}
+
+#[derive(Clone, FromRow)]
+struct PublicPaste {
+    token: String,
+    title: String,
+    content: String,
+    expires_at: i64,
+    language: String,
 }
 
 #[derive(Clone)]
@@ -84,6 +94,7 @@ struct IndexTemplate {
     token_length_options: Vec<TokenLengthOption>,
     language_options: Vec<LanguageOption>,
     total_pastes: String,
+    public_count: i64,
 }
 
 #[derive(Template)]
@@ -115,6 +126,19 @@ struct NotFoundTemplate {
     faded_count: String,
 }
 
+#[derive(Template)]
+#[template(path = "explore.html")]
+struct ExploreTemplate {
+    strings: Strings,
+    pastes: Vec<PublicPaste>,
+    total: i64,
+}
+
+#[derive(Deserialize)]
+struct ExploreQuery {
+    offset: Option<i64>,
+}
+
 #[derive(Deserialize)]
 struct PasteForm {
     title: Option<String>,
@@ -123,6 +147,7 @@ struct PasteForm {
     token_length: Option<usize>,
     language: Option<String>,
     max_views: Option<String>,
+    is_public: Option<String>,
 }
 
 #[tokio::main]
@@ -150,6 +175,8 @@ async fn main() {
         .route("/paste", post(create_paste))
         .route("/p/{token}", get(view_paste))
         .route("/r/{token}", get(view_paste_raw))
+        .route("/explore", get(explore))
+        .route("/api/explore", get(api_explore))
         .nest_service("/assets", ServeDir::new("assets"))
         .with_state(AppState { pool, config, i18n });
 
@@ -183,12 +210,21 @@ async fn index(
 
     let total_pastes = strings.stat_total_pastes.replace("{}", &max_id.to_string());
 
+    // Get public pastes count for explore entry
+    let public_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM pastes WHERE is_public = 1 AND expires_at > strftime('%s','now')",
+    )
+    .fetch_one(&state.pool)
+    .await
+    .unwrap_or(0);
+
     let body = IndexTemplate {
         strings,
         expires_options,
         token_length_options,
         language_options,
         total_pastes,
+        public_count,
     }
     .render()
     .unwrap();
@@ -233,7 +269,10 @@ async fn create_paste(
     let expires_in = normalize_expires_in(form.expires_in, &state.config.paste);
     let token_length = normalize_token_length(form.token_length, &state.config.paste);
     let language = normalize_language(form.language);
-    let max_views = normalize_max_views(form.max_views);
+    let max_views = normalize_max_views(form.max_views.clone());
+    // is_public is only allowed if max_views is not set (no burn-on-read)
+    let is_public =
+        form.is_public.as_ref().map(|s| s == "on").unwrap_or(false) && max_views.is_none();
     let expires_at = now_ts() + expires_in;
     let title = normalize_title(form.title, &form.content);
     let token = match insert_paste(
@@ -244,6 +283,7 @@ async fn create_paste(
         token_length,
         language.clone(),
         max_views,
+        is_public,
     )
     .await
     {
@@ -321,7 +361,7 @@ async fn view_paste(
     let strings = state.i18n.strings(lang);
     let item: Option<Paste> = sqlx::query_as(
         r#"
-        SELECT title, content, expires_at, language, views, max_views
+        SELECT title, content, expires_at, language, views, max_views, is_public
         FROM pastes
         WHERE token = ? AND expires_at > strftime('%s','now')
         "#,
@@ -470,6 +510,94 @@ async fn view_paste_raw(
         None => StatusCode::NOT_FOUND.into_response(),
     }
 }
+
+async fn explore(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(params): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    cleanup_expired(&state.pool).await;
+    let (lang, set_cookie) = select_language(&headers, &params);
+    let strings = state.i18n.strings(lang);
+
+    // Get all public pastes (not burn-on-read)
+    let pastes: Vec<PublicPaste> = sqlx::query_as(
+        r#"
+        SELECT token, title, content, expires_at, language
+        FROM pastes
+        WHERE is_public = 1 AND max_views IS NULL AND expires_at > strftime('%s','now')
+        ORDER BY created_at DESC
+        LIMIT 100
+        "#,
+    )
+    .fetch_all(&state.pool)
+    .await
+    .unwrap_or_default();
+
+    let total = pastes.len() as i64;
+
+    let body = ExploreTemplate {
+        strings,
+        pastes,
+        total,
+    }
+    .render()
+    .unwrap();
+
+    let mut response = Html(body).into_response();
+    if let Some(cookie) = set_cookie {
+        response.headers_mut().insert(SET_COOKIE, cookie);
+    }
+    response
+}
+
+async fn api_explore(
+    State(state): State<AppState>,
+    Query(query): Query<ExploreQuery>,
+) -> impl IntoResponse {
+    cleanup_expired(&state.pool).await;
+    let offset = query.offset.unwrap_or(0);
+
+    // Get public paste at the specified offset
+    let paste: Option<PublicPaste> = sqlx::query_as(
+        r#"
+        SELECT token, title, content, expires_at, language
+        FROM pastes
+        WHERE is_public = 1 AND max_views IS NULL AND expires_at > strftime('%s','now')
+        ORDER BY created_at DESC
+        LIMIT 1 OFFSET ?
+        "#,
+    )
+    .bind(offset)
+    .fetch_optional(&state.pool)
+    .await
+    .unwrap();
+
+    // Get total count
+    let total: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM pastes WHERE is_public = 1 AND max_views IS NULL AND expires_at > strftime('%s','now')"
+    )
+    .fetch_one(&state.pool)
+    .await
+    .unwrap_or(0);
+
+    match paste {
+        Some(p) => {
+            let json = serde_json::json!({
+                "token": p.token,
+                "title": p.title,
+                "content": p.content,
+                "expires_at": p.expires_at,
+                "language": p.language,
+                "index": offset,
+                "total": total
+            });
+            axum::Json(json).into_response()
+        }
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
 async fn ensure_schema(pool: &SqlitePool) {
     sqlx::query(
         r#"
@@ -567,6 +695,25 @@ async fn ensure_schema(pool: &SqlitePool) {
             .await
             .unwrap();
     }
+
+    // Check for is_public column
+    let columns = sqlx::query("PRAGMA table_info(pastes)")
+        .fetch_all(pool)
+        .await
+        .unwrap();
+    let mut has_is_public = false;
+    for column in columns {
+        let name: String = column.get("name");
+        if name == "is_public" {
+            has_is_public = true;
+        }
+    }
+    if !has_is_public {
+        sqlx::query("ALTER TABLE pastes ADD COLUMN is_public INTEGER NOT NULL DEFAULT 0")
+            .execute(pool)
+            .await
+            .unwrap();
+    }
 }
 
 async fn cleanup_expired(pool: &SqlitePool) {
@@ -643,13 +790,14 @@ async fn insert_paste(
     token_length: usize,
     language: String,
     max_views: Option<i64>,
+    is_public: bool,
 ) -> Result<String, sqlx::Error> {
     let mut token = generate_token(token_length);
     for _ in 0..5 {
         let result = sqlx::query(
             r#"
-            INSERT INTO pastes (token, title, content, expires_at, language, max_views)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO pastes (token, title, content, expires_at, language, max_views, is_public)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             "#,
         )
         .bind(&token)
@@ -658,6 +806,7 @@ async fn insert_paste(
         .bind(expires_at)
         .bind(&language)
         .bind(max_views)
+        .bind(is_public)
         .execute(pool)
         .await;
 
@@ -833,6 +982,17 @@ struct Strings {
     detail_zero_views: String,
     stat_total_pastes: String,
     stat_faded: String,
+    // Public / Explore
+    label_public: String,
+    label_public_tooltip: String,
+    explore_title: String,
+    explore_hint: String,
+    explore_nav_prev: String,
+    explore_nav_next: String,
+    explore_empty: String,
+    explore_swipe_hint: String,
+    explore_count: String,
+    explore_go: String,
 }
 
 #[derive(Clone)]

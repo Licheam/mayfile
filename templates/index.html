@@ -53,7 +53,6 @@
             style="width: 8em;" />
         </div>
 
-        <!-- Hidden purely visual optional or advanced settings if needed, or keep them here -->
         <div class="input-group" style="display:none;"> <!-- Hiding token length to declutter, or keep if critical -->
           <select name="token_length">
             {% for option in token_length_options %}
@@ -61,6 +60,12 @@
             {% endfor %}
           </select>
         </div>
+
+        <!-- Public Checkbox -->
+        <label class="input-group checkbox-group" title="{{ strings.label_public_tooltip }}" id="publicGroup">
+          <input type="checkbox" name="is_public" id="isPublicCheckbox" />
+          <span class="checkbox-label">{{ strings.label_public }}</span>
+        </label>
 
         <button type="submit" id="submitBtn">{{ strings.button_create }}</button>
       </div>
@@ -73,6 +78,17 @@
     <footer class="footer">
       <div id="stat-line" class="stat-line" style="opacity: 0.4; font-size: 12px; margin-bottom: 8px;">{{ total_pastes
         }}</div>
+      {% if public_count > 0 %}
+      <a href="/explore" class="explore-entry">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
+        </svg>
+        <span>{{ strings.explore_go }}</span>
+        <span class="explore-count">({{ public_count }})</span>
+      </a>
+      {% endif %}
       <div class="language-selector">
         <a href="?lang=en" class="lang-link">English</a>
         <span class="separator">/</span>
@@ -113,10 +129,27 @@
     document.addEventListener('click', function (e) {
       const contentInput = document.getElementById('contentInput');
       // If click target is not an interactive element (input, select, button, a)
-      if (!e.target.closest('input, select, button, a, textarea, .settings-bar')) {
+      if (!e.target.closest('input, select, button, a, textarea, .settings-bar, label')) {
         contentInput.focus();
       }
     });
+
+    // Disable is_public when max_views is set (burn-on-read is not compatible with public)
+    const maxViewsInput = document.querySelector('input[name="max_views"]');
+    const publicCheckbox = document.getElementById('isPublicCheckbox');
+    const publicGroup = document.getElementById('publicGroup');
+
+    function updatePublicState() {
+      const hasMaxViews = maxViewsInput.value && parseInt(maxViewsInput.value) > 0;
+      publicCheckbox.disabled = hasMaxViews;
+      publicGroup.classList.toggle('disabled', hasMaxViews);
+      if (hasMaxViews) {
+        publicCheckbox.checked = false;
+      }
+    }
+
+    maxViewsInput.addEventListener('input', updatePublicState);
+    maxViewsInput.addEventListener('change', updatePublicState);
   </script>
 </body>
 
