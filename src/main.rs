@@ -1,10 +1,10 @@
 use askama::Template;
 use axum::{
     Router,
-    extract::{Form, Path, State},
+    extract::{Form, Path, Query, State},
     http::{
         HeaderMap, HeaderValue, StatusCode,
-        header::{CONTENT_DISPOSITION, CONTENT_TYPE},
+        header::{CONTENT_DISPOSITION, CONTENT_TYPE, COOKIE, SET_COOKIE},
     },
     response::{Html, IntoResponse, Redirect},
     routing::{get, post},
@@ -16,6 +16,7 @@ use sqlx::{
     FromRow, SqlitePool,
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
 };
+use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{fs, path::PathBuf};
 use tower_http::services::ServeDir;
@@ -92,6 +93,7 @@ struct DetailTemplate {
     strings: Strings,
     token: String,
     language_label: String,
+    remaining_views: Option<String>,
 }
 
 #[derive(Template)]
@@ -100,6 +102,8 @@ struct ResultTemplate {
     path: String,
     expires_in: String,
     strings: Strings,
+    language_label: String,
+    remaining_views: Option<String>,
 }
 
 #[derive(Template)]
@@ -150,10 +154,14 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
-async fn index(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
+async fn index(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(params): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
     cleanup_expired(&state.pool).await;
     enforce_size_limit(&state.pool, state.config.paste.max_pastes, 0).await;
-    let lang = select_language(&headers);
+    let (lang, set_cookie) = select_language(&headers, &params);
     let strings = state.i18n.strings(lang);
     let expires_options = build_expires_options(&state.config.paste, &strings);
     let token_length_options = build_token_length_options(&state.config.paste, &strings);
@@ -166,7 +174,12 @@ async fn index(State(state): State<AppState>, headers: HeaderMap) -> impl IntoRe
     }
     .render()
     .unwrap();
-    Html(body)
+
+    let mut response = Html(body).into_response();
+    if let Some(cookie) = set_cookie {
+        response.headers_mut().insert(SET_COOKIE, cookie);
+    }
+    response
 }
 
 async fn create_paste(
@@ -176,7 +189,8 @@ async fn create_paste(
 ) -> impl IntoResponse {
     cleanup_expired(&state.pool).await;
     enforce_size_limit(&state.pool, state.config.paste.max_pastes, 1).await;
-    let lang = select_language(&headers);
+    let params = HashMap::new();
+    let (lang, _) = select_language(&headers, &params);
     let strings = state.i18n.strings(lang);
     let content_length = form.content.chars().count();
     if content_length > state.config.paste.max_content_length {
@@ -210,7 +224,7 @@ async fn create_paste(
         form.content,
         expires_at,
         token_length,
-        language,
+        language.clone(),
         max_views,
     )
     .await
@@ -225,11 +239,39 @@ async fn create_paste(
         }
     };
     let expires_in_text = format_duration(expires_at, &strings);
+    let language_label = build_language_options(&strings)
+        .into_iter()
+        .find(|opt| opt.value == language)
+        .map(|opt| opt.label)
+        .unwrap_or_else(|| language.clone());
+
+    let remaining_views = if let Some(max) = max_views {
+        // Newly created paste has 0 views, but we show remaining views
+        // Logic: if max=5, views=0, remaining=5.
+        // Wait, in view_paste: (max - views - 1).max(0)
+        // Here, views is effectively 0. So remaining depends on how we want to show it.
+        // If the user sets "max 5 views", it has 5 views remaining.
+        // The view_paste logic decreases by 1 because that view counts as 1.
+        // On creation, no views yet. So simple "max" is correct?
+        // Let's stick to consistent logic. If I view it, it becomes max-1.
+        // Here we just display it.
+        // Let's use max_views directly.
+        Some(
+            strings
+                .detail_remaining_views
+                .replace("{}", &max.to_string()),
+        )
+    } else {
+        None
+    };
+
     if headers.contains_key("hx-request") {
         let body = ResultTemplate {
             path: format!("/p/{}", token),
             expires_in: expires_in_text,
             strings,
+            language_label,
+            remaining_views,
         }
         .render()
         .unwrap();
@@ -243,10 +285,11 @@ async fn view_paste(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(token): Path<String>,
+    Query(params): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
     cleanup_expired(&state.pool).await;
     enforce_size_limit(&state.pool, state.config.paste.max_pastes, 0).await;
-    let lang = select_language(&headers);
+    let (lang, set_cookie) = select_language(&headers, &params);
     let strings = state.i18n.strings(lang);
     let item: Option<Paste> = sqlx::query_as(
         r#"
@@ -279,7 +322,7 @@ async fn view_paste(
         }
     }
 
-    match item {
+    let response_body = match item {
         Some(item) => {
             let language_label = build_language_options(&strings)
                 .into_iter()
@@ -287,12 +330,28 @@ async fn view_paste(
                 .map(|opt| opt.label)
                 .unwrap_or_else(|| item.language.clone());
 
+            let remaining_views = if let Some(max) = item.max_views {
+                let remaining = (max - item.views - 1).max(0);
+                if remaining == 0 {
+                    Some(strings.detail_zero_views.clone())
+                } else {
+                    Some(
+                        strings
+                            .detail_remaining_views
+                            .replace("{}", &remaining.to_string()),
+                    )
+                }
+            } else {
+                None
+            };
+
             let body = DetailTemplate {
                 expires_in: format_duration(item.expires_at, &strings),
                 item,
                 strings,
                 token,
                 language_label,
+                remaining_views,
             }
             .render()
             .unwrap();
@@ -302,7 +361,13 @@ async fn view_paste(
             let body = NotFoundTemplate { strings }.render().unwrap();
             (StatusCode::NOT_FOUND, Html(body)).into_response()
         }
+    };
+
+    let mut response = response_body;
+    if let Some(cookie) = set_cookie {
+        response.headers_mut().insert(SET_COOKIE, cookie);
     }
+    response
 }
 
 async fn view_paste_raw(
@@ -719,6 +784,8 @@ struct Strings {
     language_bash: String,
     label_burn: String,
     label_burn_views: String,
+    detail_remaining_views: String,
+    detail_zero_views: String,
 }
 
 #[derive(Clone)]
@@ -763,13 +830,55 @@ struct LanguageOption {
     selected: bool,
 }
 
-fn select_language(headers: &HeaderMap) -> Lang {
+fn select_language(
+    headers: &HeaderMap,
+    params: &HashMap<String, String>,
+) -> (Lang, Option<HeaderValue>) {
+    if let Some(lang) = params.get("lang") {
+        match lang.as_str() {
+            "zh" => {
+                return (
+                    Lang::Zh,
+                    Some(HeaderValue::from_static(
+                        "lang=zh; Path=/; Max-Age=31536000",
+                    )),
+                );
+            }
+            "en" => {
+                return (
+                    Lang::En,
+                    Some(HeaderValue::from_static(
+                        "lang=en; Path=/; Max-Age=31536000",
+                    )),
+                );
+            }
+            _ => {}
+        }
+    }
+
+    if let Some(cookie) = headers.get(COOKIE).and_then(|v| v.to_str().ok()) {
+        for part in cookie.split(';') {
+            let part = part.trim();
+            if part.starts_with("lang=") {
+                match part.strip_prefix("lang=") {
+                    Some("zh") => return (Lang::Zh, None),
+                    Some("en") => return (Lang::En, None),
+                    _ => {}
+                }
+            }
+        }
+    }
+
     let is_zh = headers
         .get("accept-language")
         .and_then(|value| value.to_str().ok())
         .map(|value| value.to_lowercase().contains("zh"))
         .unwrap_or(true);
-    if is_zh { Lang::Zh } else { Lang::En }
+    if is_zh {
+        (Lang::Zh, None)
+    } else {
+        (Lang::En, None)
+    }
 }
 
 fn build_expires_options(config: &PasteConfig, strings: &Strings) -> Vec<ExpiresOption> {

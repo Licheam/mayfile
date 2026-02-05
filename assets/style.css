@@ -320,6 +320,33 @@ button[type="submit"]:hover {
   border-radius: 0;
 }
 
+.meta-info {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 24px;
+  color: #64748b;
+  font-size: 14px;
+  margin-top: -8px;
+  margin-bottom: 24px;
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #f8fafc;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid #f1f5f9;
+}
+
+.meta-item svg {
+  width: 15px;
+  height: 15px;
+  color: #94a3b8;
+}
+
 .paste-content code {
   font-family: "JetBrains Mono", ui-monospace, monospace;
 }
@@ -327,4 +354,35 @@ button[type="submit"]:hover {
 .paste-content code.hljs {
   padding: 0;
   background: transparent;
+}
+
+/* Footer & Language Selector */
+.footer {
+  margin-top: auto;
+  padding-top: 40px;
+  text-align: center;
+  font-size: 13px;
+  color: #9aa5b1;
+}
+
+.language-selector {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.lang-link {
+  color: #9aa5b1;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+
+.lang-link:hover {
+  color: #1f6feb;
+}
+
+.separator {
+  color: #e1e4e8;
 }

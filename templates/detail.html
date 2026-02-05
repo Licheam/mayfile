@@ -22,10 +22,35 @@
         {{ strings.detail_new_paste }}
       </a>
     </div>
-    <div class="result-meta">
-      <span>{{ strings.detail_expires_label }}：{{ expires_in }}</span>
-      <span style="margin: 0 8px; color: #d7dbe1;">|</span>
-      <span>{{ strings.label_language }}：<span id="language-label-val">{{ language_label }}</span></span>
+    <div class="meta-info">
+      <div class="meta-item" title="{{ strings.detail_expires_label }}">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <polyline points="12 6 12 12 16 14"></polyline>
+        </svg>
+        <span>{{ expires_in }}</span>
+      </div>
+
+      <div class="meta-item" title="{{ strings.label_language }}">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="16 18 22 12 16 6"></polyline>
+          <polyline points="8 6 2 12 8 18"></polyline>
+        </svg>
+        <span id="language-label-val">{{ language_label }}</span>
+      </div>
+
+      {% if remaining_views.is_some() %}
+      <div class="meta-item" title="{{ strings.label_burn }}">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+          <circle cx="12" cy="12" r="3"></circle>
+        </svg>
+        <span>{{ remaining_views.as_ref().unwrap() }}</span>
+      </div>
+      {% endif %}
     </div>
     <div class="detail-actions">
       <button class="btn btn-secondary" type="button" id="copy-btn" data-label="{{ strings.detail_copy }}"
@@ -39,6 +64,14 @@
       <pre
         class="paste-content"><code id="paste-content" data-language="{{ item.language }}">{{ item.content }}</code></pre>
     </div>
+
+    <footer class="footer">
+      <div class="language-selector">
+        <a href="?lang=en" class="lang-link">English</a>
+        <span class="separator">/</span>
+        <a href="?lang=zh" class="lang-link">中文</a>
+      </div>
+    </footer>
   </main>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/highlight.min.js"></script>
   <script>

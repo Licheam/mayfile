@@ -13,7 +13,36 @@
     </button>
     <a class="result-link" href="{{ path }}" target="_blank">{{ strings.result_open }}</a>
   </div>
-  <div class="result-meta">{{ strings.result_expires_label }}：{{ expires_in }}</div>
+  <div class="meta-info">
+    <div class="meta-item" title="{{ strings.result_expires_label }}">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <polyline points="12 6 12 12 16 14"></polyline>
+      </svg>
+      <span>{{ expires_in }}</span>
+    </div>
+
+    <div class="meta-item" title="{{ strings.label_language }}">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="16 18 22 12 16 6"></polyline>
+        <polyline points="8 6 2 12 8 18"></polyline>
+      </svg>
+      <span id="language-label-val">{{ language_label }}</span>
+    </div>
+
+    {% if remaining_views.is_some() %}
+    <div class="meta-item" title="{{ strings.label_burn }}">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+        <circle cx="12" cy="12" r="3"></circle>
+      </svg>
+      <span>{{ remaining_views.as_ref().unwrap() }}</span>
+    </div>
+    {% endif %}
+  </div>
   <script>
     (function () {
       var input = document.getElementById('paste-url-input');
