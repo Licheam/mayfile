@@ -1,0 +1,17 @@
+[server]
+host = "0.0.0.0"
+port = 3000
+
+[paste]
+db_path = "data/pastebin.db"
+default_expires_secs = 86400
+expires_options_secs = [3600, 86400, 604800]
+default_token_length = 4
+token_lengths = [2, 4, 6]
+max_content_length = 1000000
+max_total_content_length = 2000000
+max_pastes = 1000
+
+[i18n]
+zh = "locales/zh.toml"
+en = "locales/en.toml"

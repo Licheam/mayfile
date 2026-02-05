@@ -1,0 +1,9 @@
+services:
+  mayfile:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./config:/app/config
+      - ./locales:/app/locales
+      - ./data:/app/data

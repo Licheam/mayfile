@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="{{ strings.lang }}">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ strings.app_title }}</title>
+    <link rel="stylesheet" href="/assets/style.css" />
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  </head>
+  <body>
+    <main class="container">
+      <h1>{{ strings.heading }}</h1>
+      <form class="paste-form" hx-post="/paste" hx-target="#result" hx-swap="innerHTML">
+        <label class="field">
+          <span>{{ strings.label_title }}</span>
+          <input type="text" name="title" placeholder="{{ strings.placeholder_title }}" />
+        </label>
+        <label class="field">
+          <span>{{ strings.label_content }}</span>
+          <textarea name="content" rows="10" required></textarea>
+        </label>
+        <label class="field">
+          <span>{{ strings.label_expires }}</span>
+          <select name="expires_in">
+            {% for option in expires_options %}
+              <option value="{{ option.value }}"{% if option.selected %} selected{% endif %}>{{ option.label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="field">
+          <span>{{ strings.label_token_length }}</span>
+          <select name="token_length">
+            {% for option in token_length_options %}
+              <option value="{{ option.value }}"{% if option.selected %} selected{% endif %}>{{ option.label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="field">
+          <span>{{ strings.label_language }}</span>
+          <select name="language">
+            {% for option in language_options %}
+              <option value="{{ option.value }}"{% if option.selected %} selected{% endif %}>{{ option.label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <button type="submit">{{ strings.button_create }}</button>
+      </form>
+      <section class="result-section" id="result">
+        <div class="result-placeholder">{{ strings.result_placeholder }}</div>
+      </section>
+    </main>
+  </body>
+</html>

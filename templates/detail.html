@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="{{ strings.lang }}">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ item.title }}</title>
+  <link rel="stylesheet" href="/assets/style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/styles/github.min.css" />
+</head>
+
+<body>
+  <main class="container">
+    <a class="back-link" href="/">{{ strings.detail_back }}</a>
+    <h1>{{ item.title }}</h1>
+    <div class="result-meta">{{ strings.detail_expires_label }}：{{ expires_in }}</div>
+    <div class="detail-actions">
+      <button class="action-button" type="button" id="copy-btn" data-label="{{ strings.detail_copy }}"
+        data-copied="{{ strings.detail_copy_done }}">
+        {{ strings.detail_copy }}
+      </button>
+      <a class="action-link" href="/r/{{ token }}">{{ strings.detail_raw }}</a>
+    </div>
+    <pre
+      class="paste-content"><code id="paste-content" data-language="{{ item.language }}">{{ item.content }}</code></pre>
+  </main>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/highlight.min.js"></script>
+  <script>
+    const copyButton = document.getElementById("copy-btn");
+    const content = document.getElementById("paste-content");
+    if (copyButton && content) {
+      const language = content.dataset.language || "auto";
+      if (window.hljs) {
+        const source = content.textContent || "";
+        if (language === "auto") {
+          const result = window.hljs.highlightAuto(source);
+          content.innerHTML = result.value;
+          content.classList.add("hljs");
+        } else if (window.hljs.getLanguage(language)) {
+          const result = window.hljs.highlight(source, { language });
+          content.innerHTML = result.value;
+          content.classList.add("hljs");
+        } else {
+          const result = window.hljs.highlightAuto(source);
+          content.innerHTML = result.value;
+          content.classList.add("hljs");
+        }
+      }
+      copyButton.addEventListener("click", async () => {
+        const text = content.textContent || "";
+        try {
+          await navigator.clipboard.writeText(text);
+          copyButton.textContent = copyButton.dataset.copied || copyButton.textContent;
+          setTimeout(() => {
+            copyButton.textContent = copyButton.dataset.label || copyButton.textContent;
+          }, 1500);
+        } catch {
+          copyButton.textContent = copyButton.dataset.label || copyButton.textContent;
+        }
+      });
+    }
+  </script>
+</body>
+
+</html>
