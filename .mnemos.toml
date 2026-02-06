@@ -1,0 +1,28 @@
+# Mnemos 配置文件
+
+[memory]
+# 长期记忆允许的 Section 标题列表
+valid_sections = [
+    "项目概述",
+    "架构决策",
+    "代码风格与约定",
+    "技术选型",
+    "重要约束与注意事项"
+]
+
+[git]
+# 默认统计最近多少天的提交
+days = 7
+# 默认最大分析提交数
+max_count = 50
+# 统计热点时忽略的文件模式
+ignore_files = ["*.lock", "package-lock.json", ".gitignore"]
+
+[search]
+# 搜索时默认显示的上下文行数
+context_lines = 1
+
+[compression]
+# 短期记忆触发压缩提醒的阈值
+max_lines = 500
+max_kb = 50

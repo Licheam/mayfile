@@ -14,41 +14,72 @@ Mnemos 让 AI Agent 具备跨会话的持久记忆能力。
 
 ## 可用命令
 
+### 初始化与维护
+- **首次使用**：`mnemos init`
+- **更新指令**：`mnemos init --only-skills` (推荐，不触碰记忆数据)
+- **健康诊断**：`mnemos doctor` (检查环境与文件完整性)
+- **危险操作**：`mnemos init -f` (强制覆盖，**会删除所有现有记忆**，严禁在成熟项目使用)
+
 ### 会话启动时执行
 
-每次新会话开始时，应按顺序执行：
+每次新会话开始时，应按顺序执行以下操作。
 
+首先，从 git 历史更新短期记忆（现在会自动按类型分组并分析热点文件）：
 ```bash
-# 1. 从 git 历史更新短期记忆
 mnemos update
+```
 
-# 2. 读取长期记忆作为上下文
+然后，读取长期记忆作为上下文：
+```bash
 mnemos show -t long
 ```
 
+### 核心原则：Agent-First
+- **优先更新 Skill**：功能变更后，优先确保 `.agent/skills/` 下的指引已同步（可使用 `mnemos init --only-skills`）。
+- **安全写入**：始终优先使用 `write_file` 配合 `mnemos write -f` 的流程来更新记忆。
+
 ### 读取记忆
 
+读取全部记忆（长期 + 短期）：
 ```bash
-# 读取全部记忆（长期 + 短期）
 mnemos show
+```
 
-# 仅读取长期记忆
+在记忆中搜索关键词（跨长期和短期）：
+```bash
+mnemos search "关键词"
+```
+
+限定搜索最近 7 天的短期记忆：
+```bash
+mnemos search "关键词" -t short -d 7
+```
+
+仅读取长期记忆：
+```bash
 mnemos show -t long
+```
 
-# 仅读取短期记忆
+仅读取短期记忆：
+```bash
 mnemos show -t short
 ```
 
 ### 更新长期记忆
 
-当对话中出现值得长期记住的信息时（如新的架构决策、代码约定、发现的坑），应写入长期记忆：
+当对话中出现值得长期记住的信息时（如新的架构决策、代码约定、发现的坑），应写入长期记忆。
 
+**AI Agent 推荐流程（最稳妥）：**
+1. 使用 `write_file` 工具创建一个包含更新内容的临时文件（如 `temp_memory.md`）。
+2. 执行 `mnemos write -s "Section名称" -f temp_memory.md [-a]`。
+3. 执行 `rm temp_memory.md` 删除临时文件。
+4. 执行 `mnemos update` 同步最新的记忆状态。
+
+这种方式可以彻底避免 Markdown 中的反引号、多行文本被 Shell 误解析的问题。
+
+**命令行快捷方式：**
 ```bash
-# 替换某个 section 的内容
-mnemos write -s "架构决策" -c "### 使用 SQLite\n选择 SQLite 作为本地数据库，因为部署简单且足够满足需求。"
-
-# 追加到某个 section
-mnemos write -s "重要约束与注意事项" -c "### 并发限制\n数据库连接池不要超过 20。" -a
+mnemos write -s "架构决策" -f decision.md
 ```
 
 **可用 section**:
