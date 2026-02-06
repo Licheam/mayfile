@@ -71,3 +71,9 @@ explore_empty = "The void is silent. Release the first Mayfly."
 explore_swipe_hint = "Swipe or use ↑↓ to drift"
 explore_count = "{} / {}"
 explore_go = "Seek Glimmer"
+
+# Life Status
+life_remaining = "Life"
+life_vibrant = "Vibrant"
+life_fading = "Fading"
+life_dying = "Dying"

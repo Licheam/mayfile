@@ -37,8 +37,12 @@
         <!-- Slides Container -->
         <div class="explore-slides" id="exploreSlides">
             {% for paste in pastes %}
-            <div class="explore-slide" data-index="{{ loop.index0 }}" data-token="{{ paste.token }}">
+            <div class="explore-slide" data-index="{{ loop.index0 }}" data-token="{{ paste.token }}"
+                data-created="{{ paste.created_at }}" data-expires="{{ paste.expires_at }}">
                 <div class="slide-content">
+                    <!-- Life Aura Glow Effect -->
+                    <div class="life-aura"></div>
+
                     <div class="slide-header">
                         <h1 class="slide-title">{{ paste.title }}</h1>
                         <a href="/p/{{ paste.token }}" class="slide-link btn btn-secondary" target="_blank">
@@ -54,6 +58,26 @@
                     <div class="slide-code-wrapper">
                         <pre
                             class="slide-code"><code class="language-{{ paste.language }}">{{ paste.content }}</code></pre>
+                    </div>
+
+                    <!-- Life Status Bar -->
+                    <div class="life-status">
+                        <div class="life-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <polyline points="12 6 12 12 16 14"></polyline>
+                            </svg>
+                        </div>
+                        <div class="life-bar-container">
+                            <div class="life-bar">
+                                <div class="life-bar-fill"></div>
+                            </div>
+                        </div>
+                        <div class="life-text">
+                            <span class="life-remaining"></span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -100,6 +124,86 @@
     </a>
 
     <script>
+        // Life Status Configuration
+        const NOW_TS = {{ now_ts }};
+        const MAX_EXPIRES_SECS = {{ max_expires_secs }};
+
+        // i18n strings
+        const LIFE_STRINGS = {
+            vibrant: "{{ strings.life_vibrant }}",
+            fading: "{{ strings.life_fading }}",
+            dying: "{{ strings.life_dying }}",
+            remaining: "{{ strings.life_remaining }}"
+        };
+
+        // Duration formatting strings (reuse from locale)
+        const DURATION_STRINGS = {
+            seconds: "{{ strings.duration_seconds }}",
+            minutes: "{{ strings.duration_minutes }}",
+            hours: "{{ strings.duration_hours }}",
+            days: "{{ strings.duration_days }}",
+            expired: "{{ strings.duration_expired }}"
+        };
+
+        function formatDuration(seconds) {
+            if (seconds <= 0) return DURATION_STRINGS.expired;
+            if (seconds < 60) return DURATION_STRINGS.seconds.replace('{}', Math.floor(seconds));
+            if (seconds < 3600) return DURATION_STRINGS.minutes.replace('{}', Math.floor(seconds / 60));
+            if (seconds < 86400) return DURATION_STRINGS.hours.replace('{}', Math.floor(seconds / 3600));
+            return DURATION_STRINGS.days.replace('{}', Math.floor(seconds / 86400));
+        }
+
+        function getLifePercentage(createdAt, expiresAt) {
+            const now = Math.floor(Date.now() / 1000);
+            const remaining = expiresAt - now;
+            const totalLifespan = expiresAt - createdAt; // Original lifespan set at creation
+            if (remaining <= 0) return 0;
+            if (totalLifespan <= 0) return 0;
+            return Math.min(100, (remaining / totalLifespan) * 100);
+        }
+
+        function getLifeStatus(percentage) {
+            if (percentage > 50) return { status: 'vibrant', text: LIFE_STRINGS.vibrant };
+            if (percentage > 25) return { status: 'fading', text: LIFE_STRINGS.fading };
+            return { status: 'dying', text: LIFE_STRINGS.dying };
+        }
+
+        function updateLifeStatus(slide) {
+            const createdAt = parseInt(slide.dataset.created);
+            const expiresAt = parseInt(slide.dataset.expires);
+            const now = Math.floor(Date.now() / 1000);
+            const remaining = expiresAt - now;
+            const percentage = getLifePercentage(createdAt, expiresAt);
+            const lifeInfo = getLifeStatus(percentage);
+
+            // Update life bar
+            const lifeBarFill = slide.querySelector('.life-bar-fill');
+            const lifeText = slide.querySelector('.life-remaining');
+            const lifeAura = slide.querySelector('.life-aura');
+            const slideContent = slide.querySelector('.slide-content');
+
+            if (lifeBarFill) {
+                lifeBarFill.style.width = percentage + '%';
+                lifeBarFill.dataset.status = lifeInfo.status;
+            }
+
+            if (lifeText) {
+                lifeText.textContent = formatDuration(remaining);
+            }
+
+            if (lifeAura) {
+                lifeAura.dataset.status = lifeInfo.status;
+            }
+
+            if (slideContent) {
+                slideContent.dataset.lifeStatus = lifeInfo.status;
+            }
+
+            // Adjust breathing animation speed
+            const breathingSpeed = percentage > 50 ? 4 : (percentage > 25 ? 2 : 1);
+            slide.style.setProperty('--breathing-duration', breathingSpeed + 's');
+        }
+
         document.addEventListener('DOMContentLoaded', function () {
             const slides = document.querySelectorAll('.explore-slide');
             const total = slides.length;
@@ -116,6 +220,14 @@
             const navPrev = document.getElementById('navPrev');
             const navNext = document.getElementById('navNext');
             const hint = document.getElementById('exploreHint');
+
+            // Initialize all slides' life status
+            slides.forEach(slide => updateLifeStatus(slide));
+
+            // Update life status periodically
+            setInterval(() => {
+                slides.forEach(slide => updateLifeStatus(slide));
+            }, 10000); // Every 10 seconds
 
             // Initialize
             updateSlides();
@@ -190,7 +302,10 @@
 
             // Keyboard navigation
             document.addEventListener('keydown', (e) => {
-                if (e.key === 'ArrowUp' || e.key === 'k') {
+                if (e.key === 'Escape') {
+                    // ESC returns to home
+                    window.location.href = '/';
+                } else if (e.key === 'ArrowUp' || e.key === 'k') {
                     e.preventDefault();
                     goPrev();
                 } else if (e.key === 'ArrowDown' || e.key === 'j' || e.key === ' ') {

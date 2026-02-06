@@ -833,3 +833,317 @@ button[type="submit"]:hover {
 .explore-page .hljs-built_in {
   color: #ffa657;
 }
+
+/* ===== LIFE STATUS VISUALIZATION ===== */
+
+/* CSS Variables for life status */
+.explore-slide {
+  --breathing-duration: 4s;
+  --life-color-vibrant: #4ade80;
+  --life-color-fading: #fbbf24;
+  --life-color-dying: #f87171;
+}
+
+/* Life Aura - Glowing border effect */
+.life-aura {
+  position: absolute;
+  inset: -2px;
+  border-radius: 18px;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0.6;
+  transition: all 0.5s ease;
+}
+
+.life-aura[data-status="vibrant"] {
+  background: linear-gradient(135deg,
+      rgba(74, 222, 128, 0.4) 0%,
+      rgba(34, 197, 94, 0.2) 50%,
+      rgba(74, 222, 128, 0.4) 100%);
+  box-shadow:
+    0 0 30px rgba(74, 222, 128, 0.3),
+    0 0 60px rgba(74, 222, 128, 0.1);
+  animation: breathe-vibrant var(--breathing-duration) ease-in-out infinite;
+}
+
+.life-aura[data-status="fading"] {
+  background: linear-gradient(135deg,
+      rgba(251, 191, 36, 0.4) 0%,
+      rgba(245, 158, 11, 0.2) 50%,
+      rgba(251, 191, 36, 0.4) 100%);
+  box-shadow:
+    0 0 30px rgba(251, 191, 36, 0.3),
+    0 0 60px rgba(251, 191, 36, 0.1);
+  animation: breathe-fading var(--breathing-duration) ease-in-out infinite;
+}
+
+.life-aura[data-status="dying"] {
+  background: linear-gradient(135deg,
+      rgba(248, 113, 113, 0.5) 0%,
+      rgba(239, 68, 68, 0.3) 50%,
+      rgba(248, 113, 113, 0.5) 100%);
+  box-shadow:
+    0 0 40px rgba(248, 113, 113, 0.4),
+    0 0 80px rgba(248, 113, 113, 0.2);
+  animation: breathe-dying var(--breathing-duration) ease-in-out infinite;
+}
+
+@keyframes breathe-vibrant {
+
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.7;
+    transform: scale(1.01);
+  }
+}
+
+@keyframes breathe-fading {
+
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.8;
+    transform: scale(1.015);
+  }
+}
+
+@keyframes breathe-dying {
+
+  0%,
+  100% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+}
+
+/* Slide content with relative positioning for aura */
+.slide-content {
+  position: relative;
+  z-index: 1;
+}
+
+/* Life Status Bar Container */
+.life-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px 16px;
+  background: #1a1a1c;
+  border-top: 1px solid #2d2d30;
+}
+
+.life-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9aa5b1;
+  opacity: 0.7;
+}
+
+.life-bar-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.life-bar {
+  flex: 1;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.life-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.5s ease, background 0.5s ease;
+}
+
+.life-bar-fill[data-status="vibrant"] {
+  background: linear-gradient(90deg, #22c55e, #4ade80);
+  box-shadow: 0 0 8px rgba(74, 222, 128, 0.5);
+}
+
+.life-bar-fill[data-status="fading"] {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+  box-shadow: 0 0 8px rgba(251, 191, 36, 0.5);
+}
+
+.life-bar-fill[data-status="dying"] {
+  background: linear-gradient(90deg, #ef4444, #f87171);
+  box-shadow: 0 0 8px rgba(248, 113, 113, 0.5);
+  animation: pulse-dying 1s ease-in-out infinite;
+}
+
+@keyframes pulse-dying {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.life-text {
+  min-width: 80px;
+  text-align: right;
+}
+
+.life-remaining {
+  font-size: 12px;
+  font-weight: 500;
+  color: #9aa5b1;
+  font-family: "JetBrains Mono", monospace;
+}
+
+/* Life status affects slide content border */
+.slide-content[data-life-status="vibrant"] {
+  border: 1px solid rgba(74, 222, 128, 0.2);
+}
+
+.slide-content[data-life-status="fading"] {
+  border: 1px solid rgba(251, 191, 36, 0.2);
+}
+
+.slide-content[data-life-status="dying"] {
+  border: 1px solid rgba(248, 113, 113, 0.3);
+}
+
+/* Responsive adjustments for life status */
+@media (max-width: 768px) {
+  .life-status {
+    padding: 10px 16px 14px;
+    gap: 10px;
+  }
+
+  .life-text {
+    min-width: 60px;
+  }
+
+  .life-remaining {
+    font-size: 11px;
+  }
+
+  .life-bar {
+    height: 3px;
+  }
+}
+
+/* Firefly particles (optional enhancement) */
+.slide-content::before,
+.slide-content::after {
+  content: '';
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 10;
+}
+
+.slide-content[data-life-status="vibrant"]::before {
+  background: var(--life-color-vibrant);
+  box-shadow: 0 0 6px var(--life-color-vibrant);
+  animation: firefly-1 8s ease-in-out infinite;
+  opacity: 0.6;
+}
+
+.slide-content[data-life-status="vibrant"]::after {
+  background: var(--life-color-vibrant);
+  box-shadow: 0 0 6px var(--life-color-vibrant);
+  animation: firefly-2 10s ease-in-out infinite 2s;
+  opacity: 0.4;
+}
+
+.slide-content[data-life-status="fading"]::before {
+  background: var(--life-color-fading);
+  box-shadow: 0 0 6px var(--life-color-fading);
+  animation: firefly-1 6s ease-in-out infinite;
+  opacity: 0.5;
+}
+
+.slide-content[data-life-status="dying"]::before {
+  background: var(--life-color-dying);
+  box-shadow: 0 0 8px var(--life-color-dying);
+  animation: firefly-dying 2s ease-in-out infinite;
+  opacity: 0.7;
+}
+
+@keyframes firefly-1 {
+
+  0%,
+  100% {
+    top: 20%;
+    left: 10%;
+    opacity: 0;
+  }
+
+  10%,
+  90% {
+    opacity: 0.6;
+  }
+
+  50% {
+    top: 60%;
+    left: 85%;
+    opacity: 0.8;
+  }
+}
+
+@keyframes firefly-2 {
+
+  0%,
+  100% {
+    top: 70%;
+    right: 15%;
+    opacity: 0;
+  }
+
+  10%,
+  90% {
+    opacity: 0.4;
+  }
+
+  50% {
+    top: 30%;
+    right: 80%;
+    opacity: 0.6;
+  }
+}
+
+@keyframes firefly-dying {
+
+  0%,
+  100% {
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.7;
+  }
+
+  50% {
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(1.5);
+    opacity: 0.3;
+  }
+}

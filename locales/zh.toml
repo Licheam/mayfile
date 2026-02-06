@@ -71,3 +71,9 @@ explore_empty = "荒野无灯，等你放飞第一只蜉邮。"
 explore_swipe_hint = "滑动或使用 ↑↓ 键流转"
 explore_count = "{} / {}"
 explore_go = "寻觅浮光"
+
+# Life Status
+life_remaining = "余命"
+life_vibrant = "生机盎然"
+life_fading = "光阴流转"
+life_dying = "余晖将尽"

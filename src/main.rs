@@ -44,6 +44,7 @@ struct PublicPaste {
     token: String,
     title: String,
     content: String,
+    created_at: i64,
     expires_at: i64,
     language: String,
 }
@@ -132,6 +133,8 @@ struct ExploreTemplate {
     strings: Strings,
     pastes: Vec<PublicPaste>,
     total: i64,
+    now_ts: i64,
+    max_expires_secs: i64,
 }
 
 #[derive(Deserialize)]
@@ -523,7 +526,7 @@ async fn explore(
     // Get all public pastes (not burn-on-read)
     let pastes: Vec<PublicPaste> = sqlx::query_as(
         r#"
-        SELECT token, title, content, expires_at, language
+        SELECT token, title, content, created_at, expires_at, language
         FROM pastes
         WHERE is_public = 1 AND max_views IS NULL AND expires_at > strftime('%s','now')
         ORDER BY created_at DESC
@@ -536,10 +539,22 @@ async fn explore(
 
     let total = pastes.len() as i64;
 
+    // Get max expires option for life percentage calculation
+    let max_expires_secs = state
+        .config
+        .paste
+        .expires_options_secs
+        .iter()
+        .copied()
+        .max()
+        .unwrap_or(86400 * 7); // default 7 days
+
     let body = ExploreTemplate {
         strings,
         pastes,
         total,
+        now_ts: now_ts(),
+        max_expires_secs,
     }
     .render()
     .unwrap();
@@ -561,7 +576,7 @@ async fn api_explore(
     // Get public paste at the specified offset
     let paste: Option<PublicPaste> = sqlx::query_as(
         r#"
-        SELECT token, title, content, expires_at, language
+        SELECT token, title, content, created_at, expires_at, language
         FROM pastes
         WHERE is_public = 1 AND max_views IS NULL AND expires_at > strftime('%s','now')
         ORDER BY created_at DESC
@@ -587,6 +602,7 @@ async fn api_explore(
                 "token": p.token,
                 "title": p.title,
                 "content": p.content,
+                "created_at": p.created_at,
                 "expires_at": p.expires_at,
                 "language": p.language,
                 "index": offset,
@@ -993,6 +1009,11 @@ struct Strings {
     explore_swipe_hint: String,
     explore_count: String,
     explore_go: String,
+    // Life Status
+    life_remaining: String,
+    life_vibrant: String,
+    life_fading: String,
+    life_dying: String,
 }
 
 #[derive(Clone)]
