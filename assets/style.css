@@ -256,6 +256,33 @@ button[type="submit"]:hover {
   color: #fff;
 }
 
+.btn-primary:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.renew-success {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #059669;
+  background: #ecfdf5;
+  padding: 0 16px;
+  height: 36px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 14px;
+  border: 1px solid #10b981;
+  animation: fadeInRenew 0.3s ease;
+}
+
+@keyframes fadeInRenew {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .btn-secondary {
   background: rgba(31, 111, 235, 0.1);
   color: #1f6feb;

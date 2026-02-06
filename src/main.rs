@@ -25,11 +25,13 @@ use tower_http::services::ServeDir;
 struct Paste {
     title: String,
     content: String,
+    created_at: i64,
     expires_at: i64,
     language: String,
     views: i64,
     max_views: Option<i64>,
     is_public: bool,
+    original_duration: i64,
 }
 
 #[derive(Clone, FromRow)]
@@ -47,6 +49,7 @@ struct PublicPaste {
     created_at: i64,
     expires_at: i64,
     language: String,
+    original_duration: i64,
 }
 
 #[derive(Clone)]
@@ -102,7 +105,7 @@ struct IndexTemplate {
 #[template(path = "detail.html")]
 struct DetailTemplate {
     item: Paste,
-    expires_in: String,
+
     strings: Strings,
     token: String,
     language_label: String,
@@ -177,6 +180,7 @@ async fn main() {
         .route("/", get(index))
         .route("/paste", post(create_paste))
         .route("/p/{token}", get(view_paste))
+        .route("/p/{token}/renew", post(renew_paste))
         .route("/r/{token}", get(view_paste_raw))
         .route("/explore", get(explore))
         .route("/api/explore", get(api_explore))
@@ -185,6 +189,61 @@ async fn main() {
 
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
+}
+
+async fn renew_paste(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(token): Path<String>,
+) -> impl IntoResponse {
+    let params = HashMap::new();
+    let (lang, _) = select_language(&headers, &params);
+    let strings = state.i18n.strings(lang);
+
+    let item: Option<(i64, i64, i64, bool, Option<i64>)> = sqlx::query_as(
+        "SELECT created_at, expires_at, original_duration, is_public, max_views FROM pastes WHERE token = ?"
+    )
+    .bind(&token)
+    .fetch_optional(&state.pool)
+    .await
+    .unwrap();
+
+    if let Some((_, expires_at, original_duration, is_public, max_views)) = item {
+        // Only allow renew for public pastes without burn-on-read
+        if !is_public || max_views.is_some() {
+            return (StatusCode::FORBIDDEN, "Not allowed").into_response();
+        }
+
+        let now = now_ts();
+        let remaining = expires_at - now;
+
+        // Only allow renew if life is < 50%
+        if remaining < (original_duration / 2) {
+            let new_expires_at = now + original_duration;
+            sqlx::query("UPDATE pastes SET expires_at = ? WHERE token = ?")
+                .bind(new_expires_at)
+                .bind(&token)
+                .execute(&state.pool)
+                .await
+                .ok();
+
+            let mut headers = HeaderMap::new();
+            let trigger_val = format!(r#"{{"renewed": {{"token": "{}", "expires": {}}}}}"#, token, new_expires_at);
+            headers.insert("HX-Trigger", HeaderValue::from_str(&trigger_val).unwrap());
+
+            return (
+                StatusCode::OK,
+                headers,
+                Html(format!(
+                    r#"<span class="renew-success">{}</span>"#,
+                    strings.renew_success
+                )),
+            )
+                .into_response();
+        }
+    }
+
+    StatusCode::BAD_REQUEST.into_response()
 }
 
 async fn index(
@@ -283,6 +342,7 @@ async fn create_paste(
         title,
         form.content,
         expires_at,
+        expires_in,
         token_length,
         language.clone(),
         max_views,
@@ -364,7 +424,7 @@ async fn view_paste(
     let strings = state.i18n.strings(lang);
     let item: Option<Paste> = sqlx::query_as(
         r#"
-        SELECT title, content, expires_at, language, views, max_views, is_public
+        SELECT title, content, created_at, expires_at, language, views, max_views, is_public, original_duration
         FROM pastes
         WHERE token = ? AND expires_at > strftime('%s','now')
         "#,
@@ -417,7 +477,6 @@ async fn view_paste(
             };
 
             let body = DetailTemplate {
-                expires_in: format_duration(item.expires_at, &strings),
                 item,
                 strings,
                 token,
@@ -526,7 +585,7 @@ async fn explore(
     // Get all public pastes (not burn-on-read)
     let pastes: Vec<PublicPaste> = sqlx::query_as(
         r#"
-        SELECT token, title, content, created_at, expires_at, language
+        SELECT token, title, content, created_at, expires_at, language, original_duration
         FROM pastes
         WHERE is_public = 1 AND max_views IS NULL AND expires_at > strftime('%s','now')
         ORDER BY created_at DESC
@@ -576,7 +635,7 @@ async fn api_explore(
     // Get public paste at the specified offset
     let paste: Option<PublicPaste> = sqlx::query_as(
         r#"
-        SELECT token, title, content, created_at, expires_at, language
+        SELECT token, title, content, created_at, expires_at, language, original_duration
         FROM pastes
         WHERE is_public = 1 AND max_views IS NULL AND expires_at > strftime('%s','now')
         ORDER BY created_at DESC
@@ -718,14 +777,29 @@ async fn ensure_schema(pool: &SqlitePool) {
         .await
         .unwrap();
     let mut has_is_public = false;
+    let mut has_original_duration = false;
     for column in columns {
         let name: String = column.get("name");
         if name == "is_public" {
             has_is_public = true;
         }
+        if name == "original_duration" {
+            has_original_duration = true;
+        }
     }
     if !has_is_public {
         sqlx::query("ALTER TABLE pastes ADD COLUMN is_public INTEGER NOT NULL DEFAULT 0")
+            .execute(pool)
+            .await
+            .unwrap();
+    }
+    if !has_original_duration {
+        sqlx::query("ALTER TABLE pastes ADD COLUMN original_duration INTEGER NOT NULL DEFAULT 86400")
+            .execute(pool)
+            .await
+            .unwrap();
+        // For existing rows, try to calculate duration or use default
+        sqlx::query("UPDATE pastes SET original_duration = expires_at - created_at WHERE original_duration = 86400 AND expires_at IS NOT NULL AND created_at IS NOT NULL")
             .execute(pool)
             .await
             .unwrap();
@@ -803,6 +877,7 @@ async fn insert_paste(
     title: String,
     content: String,
     expires_at: i64,
+    original_duration: i64,
     token_length: usize,
     language: String,
     max_views: Option<i64>,
@@ -812,14 +887,15 @@ async fn insert_paste(
     for _ in 0..5 {
         let result = sqlx::query(
             r#"
-            INSERT INTO pastes (token, title, content, expires_at, language, max_views, is_public)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO pastes (token, title, content, expires_at, original_duration, language, max_views, is_public)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             "#,
         )
         .bind(&token)
         .bind(&title)
         .bind(&content)
         .bind(expires_at)
+        .bind(original_duration)
         .bind(&language)
         .bind(max_views)
         .bind(is_public)
@@ -1014,6 +1090,8 @@ struct Strings {
     life_vibrant: String,
     life_fading: String,
     life_dying: String,
+    button_renew: String,
+    renew_success: String,
 }
 
 #[derive(Clone)]

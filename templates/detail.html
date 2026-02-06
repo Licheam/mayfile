@@ -7,6 +7,31 @@
   <title>{{ item.title }}</title>
   <link rel="stylesheet" href="/assets/style.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/styles/github.min.css" />
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <style>
+    /* Life Status Bar overrides for light theme detail page */
+    .life-status.detail-mode {
+      background: transparent;
+      border: none;
+      padding: 0;
+      margin-bottom: 24px;
+      margin-top: -12px;
+    }
+
+    .life-status.detail-mode .life-bar {
+      background: rgba(0, 0, 0, 0.06);
+      height: 6px;
+    }
+
+    .life-status.detail-mode .life-remaining {
+      color: #64748b;
+      font-size: 13px;
+    }
+
+    .life-status.detail-mode .life-icon {
+      color: #94a3b8;
+    }
+  </style>
 </head>
 
 <body>
@@ -23,14 +48,7 @@
       </a>
     </div>
     <div class="meta-info">
-      <div class="meta-item" title="{{ strings.detail_expires_label }}">
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"></circle>
-          <polyline points="12 6 12 12 16 14"></polyline>
-        </svg>
-        <span>{{ expires_in }}</span>
-      </div>
+
 
       <div class="meta-item" title="{{ strings.label_language }}">
         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
@@ -52,7 +70,32 @@
       </div>
       {% endif %}
     </div>
+
+    <!-- Life Status Bar -->
+    <div class="life-status detail-mode" id="lifeStatus" data-created="{{ item.created_at }}"
+      data-expires="{{ item.expires_at }}" data-duration="{{ item.original_duration }}">
+      <div class="life-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <polyline points="12 6 12 12 16 14"></polyline>
+        </svg>
+      </div>
+      <div class="life-bar-container">
+        <div class="life-bar">
+          <div class="life-bar-fill"></div>
+        </div>
+      </div>
+      <div class="life-text">
+        <span class="life-remaining"></span>
+      </div>
+    </div>
     <div class="detail-actions">
+      {% if item.is_public && item.max_views.is_none() %}
+      <button class="btn btn-primary" hx-post="/p/{{ token }}/renew" hx-swap="outerHTML" id="renew-btn" style="display: none;">
+        🕯️ {{ strings.button_renew }}
+      </button>
+      {% endif %}
       <button class="btn btn-secondary" type="button" id="copy-btn" data-label="{{ strings.detail_copy }}"
         data-copied="{{ strings.detail_copy_done }}">
         {{ strings.detail_copy }}
@@ -127,6 +170,89 @@
           copyButton.textContent = copyButton.dataset.label || copyButton.textContent;
         }
       });
+    }
+
+    // Life Status Logic
+    const lifeStatus = document.getElementById('lifeStatus');
+    if (lifeStatus) {
+      const LIFE_STRINGS = {
+        vibrant: "{{ strings.life_vibrant }}",
+        fading: "{{ strings.life_fading }}",
+        dying: "{{ strings.life_dying }}",
+        remaining: "{{ strings.life_remaining }}"
+      };
+
+      const DURATION_STRINGS = {
+        seconds: "{{ strings.duration_seconds }}",
+        minutes: "{{ strings.duration_minutes }}",
+        hours: "{{ strings.duration_hours }}",
+        days: "{{ strings.duration_days }}",
+        expired: "{{ strings.duration_expired }}"
+      };
+
+      function formatDuration(seconds) {
+        if (seconds <= 0) return DURATION_STRINGS.expired;
+        if (seconds < 60) return DURATION_STRINGS.seconds.replace('{}', Math.floor(seconds));
+        if (seconds < 3600) return DURATION_STRINGS.minutes.replace('{}', Math.floor(seconds / 60));
+        if (seconds < 86400) return DURATION_STRINGS.hours.replace('{}', Math.floor(seconds / 3600));
+        return DURATION_STRINGS.days.replace('{}', Math.floor(seconds / 86400));
+      }
+
+      function getLifePercentage(expiresAt, originalDuration) {
+        const now = Math.floor(Date.now() / 1000);
+        const remaining = expiresAt - now;
+        if (remaining <= 0) return 0;
+        if (originalDuration <= 0) return 0;
+        return Math.min(100, (remaining / originalDuration) * 100);
+      }
+
+      function getLifeStatus(percentage) {
+        if (percentage > 50) return { status: 'vibrant', text: LIFE_STRINGS.vibrant };
+        if (percentage > 25) return { status: 'fading', text: LIFE_STRINGS.fading };
+        return { status: 'dying', text: LIFE_STRINGS.dying };
+      }
+
+      function updateLifeStatus() {
+        const createdAt = parseInt(lifeStatus.dataset.created);
+        const expiresAt = parseInt(lifeStatus.dataset.expires);
+        const originalDuration = parseInt(lifeStatus.dataset.duration || (expiresAt - createdAt));
+        const now = Math.floor(Date.now() / 1000);
+        const remaining = expiresAt - now;
+        const percentage = getLifePercentage(expiresAt, originalDuration);
+        const lifeInfo = getLifeStatus(percentage);
+
+        const lifeBarFill = lifeStatus.querySelector('.life-bar-fill');
+        const lifeText = lifeStatus.querySelector('.life-remaining');
+        const renewBtn = document.getElementById('renew-btn');
+
+        if (lifeBarFill) {
+          lifeBarFill.style.width = percentage + '%';
+          lifeBarFill.dataset.status = lifeInfo.status;
+        }
+
+        if (lifeText) {
+          lifeText.textContent = formatDuration(remaining);
+        }
+
+        if (renewBtn) {
+          if (remaining < (originalDuration / 2)) {
+            renewBtn.style.display = 'inline-flex';
+          } else {
+            renewBtn.style.display = 'none';
+          }
+        }
+      }
+
+      // Listen for the 'renewed' event from HTMX
+      document.body.addEventListener('renewed', (evt) => {
+        if (evt.detail && evt.detail.expires) {
+          lifeStatus.dataset.expires = evt.detail.expires;
+          updateLifeStatus();
+        }
+      });
+
+      updateLifeStatus();
+      setInterval(updateLifeStatus, 1000); // Live update every second for detail page
     }
   </script>
 </body>
