@@ -68,15 +68,44 @@ pub async fn renew_paste(
 pub async fn index(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Query(params): Query<HashMap<String, String>>,
+    Query(query): Query<IndexQuery>,
 ) -> impl IntoResponse {
     db::cleanup_expired(&state.pool).await;
     db::enforce_size_limit(&state.pool, state.config.paste.max_pastes, 0).await;
+    
+    let mut params = HashMap::new();
+    if let Some(lang) = query.lang.clone() {
+        params.insert("lang".to_string(), lang);
+    }
+    
     let (lang, set_cookie) = select_language(&headers, &params);
     let strings = state.i18n.strings(lang);
+
+    let mut fork_title = None;
+    let mut fork_content = None;
+    let mut fork_language = None;
+    let mut fork_token_val = None;
+
+    if let Some(token) = query.fork {
+        let item: Option<Paste> = sqlx::query_as(
+            "SELECT title, content, created_at, expires_at, language, views, max_views, is_public, original_duration FROM pastes WHERE token = ? AND expires_at > strftime('%s','now')"
+        )
+        .bind(&token)
+        .fetch_optional(&state.pool)
+        .await
+        .unwrap_or(None);
+
+        if let Some(p) = item {
+            fork_title = Some(p.title);
+            fork_content = Some(p.content);
+            fork_language = Some(p.language);
+            fork_token_val = Some(token);
+        }
+    }
+
     let expires_options = build_expires_options(&state.config.paste, &strings);
     let token_length_options = build_token_length_options(&state.config.paste, &strings);
-    let language_options = build_language_options(&strings);
+    let language_options = build_language_options(&strings, fork_language.as_deref());
 
     let max_id: i64 = sqlx::query_scalar("SELECT MAX(id) FROM pastes")
         .fetch_one(&state.pool)
@@ -100,6 +129,9 @@ pub async fn index(
         language_options,
         total_pastes,
         public_count,
+        fork_title,
+        fork_content,
+        fork_token: fork_token_val,
     }
     .render()
     .unwrap();
@@ -173,7 +205,7 @@ pub async fn create_paste(
     };
     let expires_in_text = format_duration(expires_at, &strings);
 
-    let language_label = build_language_options(&strings)
+    let language_label = build_language_options(&strings, Some(&language))
         .into_iter()
         .find(|opt| opt.value == language)
         .map(|opt| opt.label)
@@ -256,7 +288,7 @@ pub async fn view_paste(
 
     let response_body = match item {
         Some(item) => {
-            let language_label = build_language_options(&strings)
+            let language_label = build_language_options(&strings, Some(&item.language))
                 .into_iter()
                 .find(|opt| opt.value == item.language)
                 .map(|opt| opt.label)
@@ -547,23 +579,24 @@ pub fn build_token_length_options(config: &PasteConfig, strings: &Strings) -> Ve
         .collect()
 }
 
-pub fn build_language_options(strings: &Strings) -> Vec<LanguageOption> {
+pub fn build_language_options(strings: &Strings, selected_lang: Option<&str>) -> Vec<LanguageOption> {
+    let target = selected_lang.unwrap_or("auto");
     vec![
-        LanguageOption { value: "auto".to_string(), label: strings.language_auto.clone(), selected: true },
-        LanguageOption { value: "plaintext".to_string(), label: strings.language_plaintext.clone(), selected: false },
-        LanguageOption { value: "rust".to_string(), label: strings.language_rust.clone(), selected: false },
-        LanguageOption { value: "python".to_string(), label: strings.language_python.clone(), selected: false },
-        LanguageOption { value: "javascript".to_string(), label: strings.language_javascript.clone(), selected: false },
-        LanguageOption { value: "typescript".to_string(), label: strings.language_typescript.clone(), selected: false },
-        LanguageOption { value: "go".to_string(), label: strings.language_go.clone(), selected: false },
-        LanguageOption { value: "java".to_string(), label: strings.language_java.clone(), selected: false },
-        LanguageOption { value: "cpp".to_string(), label: strings.language_cpp.clone(), selected: false },
-        LanguageOption { value: "html".to_string(), label: strings.language_html.clone(), selected: false },
-        LanguageOption { value: "css".to_string(), label: strings.language_css.clone(), selected: false },
-        LanguageOption { value: "json".to_string(), label: strings.language_json.clone(), selected: false },
-        LanguageOption { value: "yaml".to_string(), label: strings.language_yaml.clone(), selected: false },
-        LanguageOption { value: "sql".to_string(), label: strings.language_sql.clone(), selected: false },
-        LanguageOption { value: "bash".to_string(), label: strings.language_bash.clone(), selected: false },
+        LanguageOption { value: "auto".to_string(), label: strings.language_auto.clone(), selected: target == "auto" },
+        LanguageOption { value: "plaintext".to_string(), label: strings.language_plaintext.clone(), selected: target == "plaintext" },
+        LanguageOption { value: "rust".to_string(), label: strings.language_rust.clone(), selected: target == "rust" },
+        LanguageOption { value: "python".to_string(), label: strings.language_python.clone(), selected: target == "python" },
+        LanguageOption { value: "javascript".to_string(), label: strings.language_javascript.clone(), selected: target == "javascript" },
+        LanguageOption { value: "typescript".to_string(), label: strings.language_typescript.clone(), selected: target == "typescript" },
+        LanguageOption { value: "go".to_string(), label: strings.language_go.clone(), selected: target == "go" },
+        LanguageOption { value: "java".to_string(), label: strings.language_java.clone(), selected: target == "java" },
+        LanguageOption { value: "cpp".to_string(), label: strings.language_cpp.clone(), selected: target == "cpp" },
+        LanguageOption { value: "html".to_string(), label: strings.language_html.clone(), selected: target == "html" },
+        LanguageOption { value: "css".to_string(), label: strings.language_css.clone(), selected: target == "css" },
+        LanguageOption { value: "json".to_string(), label: strings.language_json.clone(), selected: target == "json" },
+        LanguageOption { value: "yaml".to_string(), label: strings.language_yaml.clone(), selected: target == "yaml" },
+        LanguageOption { value: "sql".to_string(), label: strings.language_sql.clone(), selected: target == "sql" },
+        LanguageOption { value: "bash".to_string(), label: strings.language_bash.clone(), selected: target == "bash" },
     ]
 }
 

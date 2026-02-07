@@ -1,4 +1,4 @@
-use crate::utils::{generate_token, now_ts};
+use crate::utils::generate_token;
 use sqlx::{Row, SqlitePool};
 
 pub async fn ensure_schema(pool: &SqlitePool) {
@@ -253,6 +253,7 @@ pub async fn insert_paste(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utils::now_ts;
     use sqlx::sqlite::SqlitePoolOptions;
 
     async fn setup_test_db() -> SqlitePool {

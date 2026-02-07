@@ -144,6 +144,7 @@ pub struct Strings {
     pub life_dying: String,
     pub button_renew: String,
     pub renew_success: String,
+    pub button_fork: String,
 }
 
 #[derive(Clone)]
@@ -177,6 +178,17 @@ pub struct IndexTemplate {
     pub language_options: Vec<LanguageOption>,
     pub total_pastes: String,
     pub public_count: i64,
+
+    // Fork data
+    pub fork_title: Option<String>,
+    pub fork_content: Option<String>,
+    pub fork_token: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct IndexQuery {
+    pub lang: Option<String>,
+    pub fork: Option<String>,
 }
 
 #[derive(Template)]

@@ -23,13 +23,14 @@
       <!-- Content Area (Priority) -->
       <div class="content-area">
         <textarea name="content" id="contentInput" placeholder="{{ strings.label_content }}..." required
-          autofocus></textarea>
+          autofocus>{% if let Some(content) = fork_content %}{{ content }}{% endif %}</textarea>
       </div>
 
       <!-- Settings Bar -->
       <div class="settings-bar">
         <div class="input-group">
-          <input type="text" name="title" id="titleInput" placeholder="{{ strings.placeholder_title }}" />
+          <input type="text" name="title" id="titleInput" placeholder="{{ strings.placeholder_title }}" 
+            {% if let Some(title) = fork_title %}value="{{ title }}"{% endif %} />
         </div>
 
         <div class="input-group">
@@ -90,9 +91,9 @@
       </a>
       {% endif %}
       <div class="language-selector">
-        <a href="?lang=en" class="lang-link">English</a>
+        <a href="?lang=en{% if let Some(t) = fork_token %}&fork={{ t }}{% endif %}" class="lang-link">English</a>
         <span class="separator">/</span>
-        <a href="?lang=zh" class="lang-link">中文</a>
+        <a href="?lang=zh{% if let Some(t) = fork_token %}&fork={{ t }}{% endif %}" class="lang-link">中文</a>
       </div>
     </footer>
   </main>
